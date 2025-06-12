@@ -28,6 +28,11 @@ import type {
   NullValueNode,
   LogicalOperatorNode,
 } from "../ast/expression-nodes";
+import type {
+  ArrayContainmentNode,
+  ArrayOverlapNode,
+  ArrayScalarNode,
+} from "../ast/array-nodes";
 import type { PostgreSQLCompiledQuery } from "./postgres-driver";
 
 /**
@@ -130,6 +135,15 @@ export class PostgresQueryCompiler {
         break;
       case "ParensNode":
         this.visitParens(node as import("../ast/expression-nodes").ParensNode);
+        break;
+      case "ArrayContainmentNode":
+        this.visitArrayContainment(node as ArrayContainmentNode);
+        break;
+      case "ArrayOverlapNode":
+        this.visitArrayOverlap(node as ArrayOverlapNode);
+        break;
+      case "ArrayScalarNode":
+        this.visitArrayScalar(node as ArrayScalarNode);
         break;
       default:
         throw new Error(`Unknown node kind: ${(node as any).kind}`);
@@ -530,6 +544,39 @@ export class PostgresQueryCompiler {
   ): void {
     this.append("(");
     this.visitNode(node.expression);
+    this.append(")");
+  }
+
+  /**
+   * Visit an array containment node (@> or <@ operators)
+   */
+  private visitArrayContainment(node: ArrayContainmentNode): void {
+    this.visitNode(node.column);
+    this.append(` ${node.operator} `);
+    this.append("ARRAY[");
+    this.visitNode(node.values);
+    this.append("]");
+  }
+
+  /**
+   * Visit an array overlap node (&& operator)
+   */
+  private visitArrayOverlap(node: ArrayOverlapNode): void {
+    this.visitNode(node.column);
+    this.append(" && ");
+    this.append("ARRAY[");
+    this.visitNode(node.values);
+    this.append("]");
+  }
+
+  /**
+   * Visit an array scalar node (ANY/ALL functions)
+   */
+  private visitArrayScalar(node: ArrayScalarNode): void {
+    this.visitNode(node.value);
+    this.append(" = ");
+    this.append(`${node.operator}(`);
+    this.visitNode(node.column);
     this.append(")");
   }
 

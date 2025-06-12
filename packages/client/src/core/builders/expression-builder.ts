@@ -9,6 +9,8 @@ import {
   type LogicalOperationNode,
   type ParensNode,
 } from "../ast/expression-nodes";
+import type { ArrayColumnOf } from "../types/array";
+import { ArrayExpressionBuilder } from "./array-expression-builder";
 import type {
   WhereOperator,
   ColumnReference,
@@ -415,6 +417,28 @@ function createFluentJsonbBuilder<
 }
 
 /**
+ * Create a fluent Array expression builder
+ */
+function createArrayExpressionBuilder<
+  DB,
+  TB extends keyof DB,
+  K extends ArrayColumnOf<DB, TB>
+>(column: K): ArrayExpressionBuilder<any> {
+  // Parse column reference to create ReferenceNode
+  const columnStr = column as string;
+  const parts = columnStr.includes(".")
+    ? columnStr.split(".")
+    : [undefined, columnStr];
+  const [table, columnName] =
+    parts.length === 2 ? [parts[0], parts[1]] : [undefined, parts[0]];
+
+  // Create column reference node
+  const columnNode = ExpressionNodeFactory.createReference(columnName!, table);
+
+  return new ArrayExpressionBuilder(columnNode);
+}
+
+/**
  * Create a chained JSONB expression: column -> field = value or column #> path = value
  */
 function createJsonbChainExpression<K extends string>(
@@ -684,6 +708,20 @@ export interface ExpressionHelpers<DB, TB extends keyof DB> {
   jsonb: <K extends JsonbColumnOf<DB, TB>>(
     column: K
   ) => JsonbExpressionBuilder<DB, TB, K>;
+
+  /**
+   * Create PostgreSQL array operations with fluent API
+   *
+   * ARRAY API: Supports all PostgreSQL array operators with type safety
+   * - array("tags").contains(["typescript", "nodejs"])     → tags @> ARRAY['typescript', 'nodejs']
+   * - array("permissions").hasAny("admin")                 → 'admin' = ANY(permissions)
+   * - array("skills").overlaps(["react", "vue"])           → skills && ARRAY['react', 'vue']
+   * - array("scores").hasAll(100)                          → 100 = ALL(scores)
+   * - array("categories").isContainedBy(["tech", "news"])  → categories <@ ARRAY['tech', 'news']
+   */
+  array: <K extends ArrayColumnOf<DB, TB>>(
+    column: K
+  ) => ArrayExpressionBuilder<any>;
 }
 
 /**
@@ -954,6 +992,8 @@ function createStandaloneHelpers<DB, TB extends keyof DB>(
     not: (expression: Expression<SqlBool>) => eb.not(expression),
     jsonb: <K extends JsonbColumnOf<DB, TB>>(column: K) =>
       createFluentJsonbBuilder(column),
+    array: <K extends ArrayColumnOf<DB, TB>>(column: K) =>
+      createArrayExpressionBuilder(column),
   };
 }
 
