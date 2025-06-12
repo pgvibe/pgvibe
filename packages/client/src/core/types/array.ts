@@ -47,7 +47,7 @@ export type ArrayElementType<T> = T extends ArrayType<infer U>
 /**
  * Helper type to identify array columns in a database schema
  *
- * This mapped type filters table columns to only those that are ArrayType,
+ * This mapped type filters table columns to only those that are ArrayType or plain array types,
  * enabling the array() helper function to only accept valid array columns.
  *
  * @template DB - The database schema type
@@ -60,16 +60,20 @@ export type ArrayElementType<T> = T extends ArrayType<infer U>
  *   users: {
  *     id: number;           // Not included
  *     name: string;         // Not included
- *     tags: ArrayType<string[]>;      // Included
- *     permissions: ArrayType<string[]>; // Included
+ *     tags: string[];       // Included (plain array)
+ *     scores: ArrayType<number[]>; // Included (branded array)
  *   };
  * }
  *
- * ArrayColumnOf<Database, "users"> = "tags" | "permissions"
+ * ArrayColumnOf<Database, "users"> = "tags" | "scores"
  * ```
  */
 export type ArrayColumnOf<DB, TB extends keyof DB> = {
-  [K in keyof DB[TB]]: DB[TB][K] extends ArrayType<any> ? K & string : never;
+  [K in keyof DB[TB]]: DB[TB][K] extends ArrayType<any>
+    ? K & string
+    : DB[TB][K] extends readonly any[]
+    ? K & string
+    : never;
 }[keyof DB[TB]];
 
 /**
@@ -109,6 +113,48 @@ export type ValidArrayValue<T, V> = T extends ArrayType<infer U>
       : never
     : never
   : never;
+
+/**
+ * Error message type for invalid array operations
+ */
+export type ArrayTypeError<T extends string> = {
+  readonly __arrayTypeError: T;
+  readonly __brand: never;
+};
+
+/**
+ * Enhanced error messages for better developer experience
+ */
+export type InvalidArrayElementError =
+  ArrayTypeError<"❌ Array element type is not valid. Expected: string, number, boolean, or Date.">;
+
+export type InvalidArrayColumnError<T extends string> =
+  ArrayTypeError<`❌ Column '${T}' is not an array column. Array operations can only be used on columns with array types.`>;
+
+export type ArrayOperationMismatchError<
+  T extends string,
+  V
+> = ArrayTypeError<`❌ Type mismatch in array operation. Column '${T}' expects array elements of type ${string}, but received ${string}.`>;
+
+/**
+ * Developer-friendly array column validator with helpful error messages
+ */
+export type ValidateArrayColumn<
+  DB,
+  TB extends keyof DB,
+  K extends keyof DB[TB]
+> = DB[TB][K] extends ArrayType<any> ? K : InvalidArrayColumnError<K & string>;
+
+/**
+ * Developer-friendly array element validator with helpful error messages
+ */
+export type ValidateArrayElements<T, V> = T extends ArrayType<infer U>
+  ? V extends readonly U[]
+    ? V
+    : V extends U
+    ? V
+    : ArrayOperationMismatchError<string, V>
+  : InvalidArrayElementError;
 
 // Re-export for convenience
 export type { ArrayType as PgArray };
