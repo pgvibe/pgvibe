@@ -423,7 +423,7 @@ function createArrayExpressionBuilder<
   DB,
   TB extends keyof DB,
   K extends ArrayColumnOf<DB, TB>
->(column: K): ArrayExpressionBuilder<any> {
+>(column: K): ArrayExpressionBuilder<DB, TB, K> {
   // Parse column reference to create ReferenceNode
   const columnStr = column as string;
   const parts = columnStr.includes(".")
@@ -721,7 +721,7 @@ export interface ExpressionHelpers<DB, TB extends keyof DB> {
    */
   array: <K extends ArrayColumnOf<DB, TB>>(
     column: K
-  ) => ArrayExpressionBuilder<any>;
+  ) => ArrayExpressionBuilder<DB, TB, K>;
 }
 
 /**

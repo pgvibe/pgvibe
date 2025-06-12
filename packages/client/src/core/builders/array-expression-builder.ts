@@ -13,6 +13,7 @@ import { ExpressionNodeFactory } from "../ast/expression-nodes";
 import type {
   ArrayType,
   ArrayElementType,
+  ArrayColumnOf,
   ValidArrayValue,
   ValidArrayElement,
 } from "../types/array";
@@ -27,8 +28,11 @@ import type {
  * All operations return Expression<SqlBool> which can be used in WHERE clauses
  * and combined with logical operators (AND, OR, NOT).
  */
-export class ArrayExpressionBuilder<T extends ArrayType<any>>
-  implements Expression<SqlBool>
+export class ArrayExpressionBuilder<
+  DB,
+  TB extends keyof DB,
+  K extends ArrayColumnOf<DB, TB>
+> implements Expression<SqlBool>
 {
   readonly expressionType?: SqlBool = undefined;
 
@@ -62,8 +66,14 @@ export class ArrayExpressionBuilder<T extends ArrayType<any>>
    *   .execute();
    * ```
    */
-  contains<V extends ValidArrayValue<T, readonly any[]>>(
-    values: V
+  contains(
+    values: DB[TB][K] extends ArrayType<infer U>
+      ? U extends readonly (infer E)[]
+        ? readonly E[]
+        : never
+      : DB[TB][K] extends readonly (infer E)[]
+      ? readonly E[]
+      : never
   ): Expression<SqlBool> {
     return new ArrayContainmentExpression(
       this.column,
@@ -92,8 +102,14 @@ export class ArrayExpressionBuilder<T extends ArrayType<any>>
    *   .execute();
    * ```
    */
-  isContainedBy<V extends ValidArrayValue<T, readonly any[]>>(
-    values: V
+  isContainedBy(
+    values: DB[TB][K] extends ArrayType<infer U>
+      ? U extends readonly (infer E)[]
+        ? readonly E[]
+        : never
+      : DB[TB][K] extends readonly (infer E)[]
+      ? readonly E[]
+      : never
   ): Expression<SqlBool> {
     return new ArrayContainmentExpression(
       this.column,
@@ -120,8 +136,14 @@ export class ArrayExpressionBuilder<T extends ArrayType<any>>
    *   .execute();
    * ```
    */
-  overlaps<V extends ValidArrayValue<T, readonly any[]>>(
-    values: V
+  overlaps(
+    values: DB[TB][K] extends ArrayType<infer U>
+      ? U extends readonly (infer E)[]
+        ? readonly E[]
+        : never
+      : DB[TB][K] extends readonly (infer E)[]
+      ? readonly E[]
+      : never
   ): Expression<SqlBool> {
     return new ArrayOverlapExpression(
       this.column,
@@ -147,7 +169,15 @@ export class ArrayExpressionBuilder<T extends ArrayType<any>>
    *   .execute();
    * ```
    */
-  hasAny<V extends ValidArrayElement<T, any>>(value: V): Expression<SqlBool> {
+  hasAny(
+    value: DB[TB][K] extends ArrayType<infer U>
+      ? U extends readonly (infer E)[]
+        ? E
+        : never
+      : DB[TB][K] extends readonly (infer E)[]
+      ? E
+      : never
+  ): Expression<SqlBool> {
     return new ArrayScalarExpression(
       ExpressionNodeFactory.createValue(value, true),
       "ANY",
@@ -173,7 +203,15 @@ export class ArrayExpressionBuilder<T extends ArrayType<any>>
    *   .execute();
    * ```
    */
-  hasAll<V extends ValidArrayElement<T, any>>(value: V): Expression<SqlBool> {
+  hasAll(
+    value: DB[TB][K] extends ArrayType<infer U>
+      ? U extends readonly (infer E)[]
+        ? E
+        : never
+      : DB[TB][K] extends readonly (infer E)[]
+      ? E
+      : never
+  ): Expression<SqlBool> {
     return new ArrayScalarExpression(
       ExpressionNodeFactory.createValue(value, true),
       "ALL",
