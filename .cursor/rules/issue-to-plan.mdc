@@ -1,0 +1,101 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+For the given overview.md file, create a plan.md that breaks down the implementation into outcome-focused phases. Each phase should define what needs to be achieved rather than prescribing specific implementation steps.
+
+Structure the plan to encourage exploration and learning:
+- Start with research and problem understanding
+- Define clear success criteria for each phase  
+- Allow flexibility in HOW goals are achieved
+- Build in checkpoints to validate approach before proceeding
+
+Organize phases so we can implement one at a time, with each phase building on learnings from previous phases. Focus on goals and outcomes rather than specific tasks.
+
+Example:
+
+# [feature]
+
+## Overview
+Brief description of what we're building and why.
+
+---
+
+## Phase 1: Discovery & Understanding
+
+### 1.1 Problem Research
+- **Goal**: Understand the problem space deeply
+- **Deliverables**: 
+  - Document current pain points and requirements
+  - Research how others solve similar problems
+  - Identify 2-3 potential approaches
+- **Success Criteria**: Clear understanding of problem and viable solution paths
+
+### 1.2 Solution Validation
+- **Goal**: Choose the optimal approach
+- **Deliverables**:
+  - Prototype key concepts (time-boxed to 2-4 hours)
+  - Document trade-offs of each approach
+  - Select approach and justify decision
+- **Success Criteria**: Confident in chosen approach with clear rationale
+
+**🎯 Phase 1 Exit Criteria**: Problem understood, approach selected, ready to implement
+
+---
+
+## Phase 2: Core Implementation
+
+### 2.1 Foundation
+- **Goal**: Build working core functionality
+- **Approach**: [To be defined after Phase 1]
+- **Success Criteria**: 
+  - Core feature works in happy path scenarios
+  - Basic tests pass
+  - Integrates with existing system
+
+### 2.2 Completeness
+- **Goal**: Handle edge cases and error conditions
+- **Success Criteria**:
+  - Comprehensive test coverage
+  - Error handling implemented
+  - Documentation updated
+
+**🎯 Phase 2 Exit Criteria**: Feature complete and tested
+
+---
+
+## Phase 3: Polish & Integration
+
+### 3.1 Developer Experience
+- **Goal**: Ensure great developer experience
+- **Success Criteria**: 
+  - Type safety implemented
+  - Clear error messages
+  - Good performance
+
+### 3.2 Production Readiness
+- **Goal**: Ready for production use
+- **Success Criteria**:
+  - All tests passing
+  - Documentation complete
+  - Breaking changes documented
+
+**🎯 Phase 3 Exit Criteria**: Production ready
+
+---
+
+## Key Principles
+
+1. **Outcome-Focused**: Each phase defines what success looks like, not how to get there
+2. **Exploration-Friendly**: Built-in research and prototyping phases
+3. **Flexible Implementation**: "How" is determined during implementation, not beforehand
+4. **Clear Checkpoints**: Each phase has clear exit criteria
+5. **Learning-Oriented**: Plan evolves based on discoveries
+
+## Notes for Implementation
+
+- **Start each phase by reviewing the goal and success criteria**
+- **Feel free to deviate from assumptions if you discover better approaches**
+- **Update this plan as you learn - it's a living document**
+- **If you're stuck, step back and reassess the current phase's goal**

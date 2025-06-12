@@ -1,0 +1,78 @@
+{
+  "name": "@pgvibe/client",
+  "version": "0.1.0",
+  "description": "A PostgreSQL-native TypeScript query builder",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "bun run build:js && bun run build:types",
+    "build:js": "bun build src/index.ts --outdir dist --target node --minify",
+    "build:types": "bunx tsc src/index.ts --declaration --emitDeclarationOnly --outDir dist",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "bun run clean && bun run build",
+    "test": "bun test tests/ && bun run test:types",
+    "test:types": "tsd --typings dist/index.d.ts --files \"tests/types/*.test-d.ts\"",
+    "test:types:watch": "tsd --watch",
+    "test:runtime": "bun test --ignore tests/types/",
+    "test:integration": "bun test tests/integration/",
+    "test:performance": "bun test tests/performance/",
+    "test:watch": "bun test --watch",
+    "typecheck": "tsc --noEmit",
+    "dev": "bun run --watch playground/index.ts",
+    "db:up": "docker-compose up -d",
+    "db:down": "docker-compose down",
+    "db:reset": "docker-compose down -v && docker-compose up -d"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "keywords": [
+    "query",
+    "builder",
+    "sql",
+    "postgresql",
+    "postgres",
+    "database",
+    "typescript",
+    "orm",
+    "query-builder"
+  ],
+  "author": "",
+  "license": "MIT",
+  "homepage": "https://github.com/pgvibe/pgvibe#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pgvibe/pgvibe.git"
+  },
+  "bugs": {
+    "url": "https://github.com/pgvibe/pgvibe/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "pg": "^8.11.3"
+  },
+  "devDependencies": {
+    "@tsd/typescript": "^5.8.3",
+    "@types/bun": "latest",
+    "@types/pg": "^8.10.9",
+    "expect-type": "^0.17.3",
+    "jest": "^30.0.0",
+    "tsd": "^0.31.0",
+    "tsd-lite": "^0.9.0",
+    "typescript": "^5.8.3"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.0.0"
+  }
+}

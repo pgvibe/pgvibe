@@ -1,0 +1,15 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+## Overview
+
+
+## Tools
+
+This project is using `bun` for everything `bun` can do.
+
+## Test
+
+Run all tests using this command: `bun run test`.

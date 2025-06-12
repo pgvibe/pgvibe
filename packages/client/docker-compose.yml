@@ -1,0 +1,28 @@
+name: zenq
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: zenq-postgres
+    environment:
+      POSTGRES_DB: zenq_test
+      POSTGRES_USER: zenq_user
+      POSTGRES_PASSWORD: zenq_password
+    ports:
+      - "54322:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./databases/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zenq_user -d zenq_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+
+# Development helper services
+networks:
+  default:
+    name: zenq-network

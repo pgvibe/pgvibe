@@ -1,0 +1,26 @@
+{
+  "name": "pgvibe",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --filter='*' dev",
+    "build": "bun run --filter='*' build",
+    "test": "bun run --filter='*' test",
+    "typecheck": "bun run --filter='*' typecheck",
+    "client:dev": "bun run --filter='@pgvibe/client' dev",
+    "client:test": "bun run --filter='@pgvibe/client' test",
+    "codegen:dev": "bun run --filter='@pgvibe/codegen' dev",
+    "migrations:dev": "bun run --filter='@pgvibe/migrations' dev",
+    "clean": "bun run --filter='*' clean"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}

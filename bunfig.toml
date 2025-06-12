@@ -1,0 +1,25 @@
+# Bun configuration for pgvibe monorepo
+
+[test]
+# Run tests from any directory
+root = "./"
+# Use TypeScript for test files
+preload = []
+
+[install]
+# Use workspaces
+auto = true
+# Faster installs
+frozen = false
+# Use exact versions for reproducibility  
+exact = false
+
+[install.scopes]
+# Configure scoped package resolution
+"@pgvibe" = { "url" = "file:packages" }
+
+[build]
+# Default build target
+target = "node"
+# Enable source maps for debugging
+sourcemap = "external" 

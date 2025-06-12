@@ -1,0 +1,23 @@
+# Source files (only publish built files)
+*.ts
+!*.d.ts
+
+# Development files
+tsconfig.json
+.gitignore
+bun.lock
+
+# Directories
+node_modules/
+.git/
+.vscode/
+.idea/
+
+# Logs
+logs/
+*.log
+
+# Misc
+.DS_Store
+.env*
+coverage/ 

@@ -1,0 +1,24 @@
+---
+description: 
+globs: *.test.ts
+alwaysApply: false
+---
+# Testing Guide
+
+This directory contains tests for the PostgreSQL schema migration tool.
+
+Remember: If a test fails, don't only try to make it work by changing the test. It is equally important to look at the source code that might inculde a bug or might not be implemented correctly and fixing it there.
+
+## Test Database
+
+Tests run against a real PostgreSQL database in Docker:
+
+- Host: `localhost`
+- Port: `54322`
+- Database: `postgres`
+- User: `postgres`
+- Password: `password`
+
+The test setup automatically starts the database and waits for it to be ready.
+
+
