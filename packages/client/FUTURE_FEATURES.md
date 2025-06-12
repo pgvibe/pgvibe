@@ -4,12 +4,6 @@ This document outlines planned advanced PostgreSQL features for ZenQ after the F
 
 ## PostgreSQL Advanced Features
 
-### JSONB Operations
-
-- **JSONB operators**: `->`, `->>`, `@>`, `?`, `?&`, `?|`
-- **Type-safe JSONB query methods**
-- **JSONB AST nodes and compilation**
-
 ### Array Support
 
 - **Array operators**: `ANY`, `ALL`, `@>`, `<@`, `&&`

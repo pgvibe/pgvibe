@@ -12,6 +12,10 @@ export interface UserTable {
   email: string | null;
   active: boolean;
   created_at: Date;
+  // Array columns for array operation testing
+  tags: string[];
+  permissions: string[];
+  scores: number[];
 }
 
 /**
@@ -24,6 +28,9 @@ export interface PostTable {
   content: string | null;
   published: boolean;
   created_at: Date;
+  // Array columns for array operation testing
+  categories: string[];
+  ratings: number[];
 }
 
 /**
