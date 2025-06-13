@@ -78,7 +78,7 @@ export class ArrayExpressionBuilder<
     return new ArrayContainmentExpression(
       this.column,
       "@>",
-      ExpressionNodeFactory.createValue([...values] as unknown[], true)
+      ExpressionNodeFactory.createArrayValue([...values] as unknown[], true)
     );
   }
 
@@ -114,7 +114,7 @@ export class ArrayExpressionBuilder<
     return new ArrayContainmentExpression(
       this.column,
       "<@",
-      ExpressionNodeFactory.createValue([...values] as unknown[], true)
+      ExpressionNodeFactory.createArrayValue([...values] as unknown[], true)
     );
   }
 
@@ -147,7 +147,7 @@ export class ArrayExpressionBuilder<
   ): Expression<SqlBool> {
     return new ArrayOverlapExpression(
       this.column,
-      ExpressionNodeFactory.createValue([...values] as unknown[], true)
+      ExpressionNodeFactory.createArrayValue([...values] as unknown[], true)
     );
   }
 
@@ -230,7 +230,7 @@ class ArrayContainmentExpression implements Expression<SqlBool> {
   constructor(
     private readonly column: ReferenceNode,
     private readonly operator: "@>" | "<@",
-    private readonly values: import("../ast/expression-nodes").ValueNode
+    private readonly values: import("../ast/expression-nodes").ArrayValueNode
   ) {}
 
   toOperationNode(): ArrayContainmentNode {
