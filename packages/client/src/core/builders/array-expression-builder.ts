@@ -252,7 +252,7 @@ class ArrayOverlapExpression implements Expression<SqlBool> {
 
   constructor(
     private readonly column: ReferenceNode,
-    private readonly values: import("../ast/expression-nodes").ValueNode
+    private readonly values: import("../ast/expression-nodes").ArrayValueNode
   ) {}
 
   toOperationNode(): ArrayOverlapNode {

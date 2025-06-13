@@ -2,7 +2,11 @@
 // Defines AST nodes for PostgreSQL array operations following the established pattern
 
 import type { ExpressionNode } from "./select-query-node";
-import type { ReferenceNode, ValueNode } from "./expression-nodes";
+import type {
+  ReferenceNode,
+  ValueNode,
+  ArrayValueNode,
+} from "./expression-nodes";
 
 /**
  * Array containment operation node for @> and <@ operators
@@ -19,7 +23,7 @@ export interface ArrayContainmentNode extends ExpressionNode {
   readonly kind: "ArrayContainmentNode";
   readonly column: ReferenceNode;
   readonly operator: "@>" | "<@";
-  readonly values: ValueNode;
+  readonly values: ArrayValueNode;
 }
 
 /**
@@ -34,7 +38,7 @@ export interface ArrayContainmentNode extends ExpressionNode {
 export interface ArrayOverlapNode extends ExpressionNode {
   readonly kind: "ArrayOverlapNode";
   readonly column: ReferenceNode;
-  readonly values: ValueNode;
+  readonly values: ArrayValueNode;
 }
 
 /**

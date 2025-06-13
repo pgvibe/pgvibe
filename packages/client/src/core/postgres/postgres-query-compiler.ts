@@ -571,6 +571,14 @@ export class PostgresQueryCompiler {
     this.append("ARRAY[");
     this.visitNode(node.values);
     this.append("]");
+
+    // Add type casting for empty arrays to avoid PostgreSQL type inference issues
+    if (
+      node.values.kind === "ArrayValueNode" &&
+      node.values.values.length === 0
+    ) {
+      this.append("::text[]");
+    }
   }
 
   /**
