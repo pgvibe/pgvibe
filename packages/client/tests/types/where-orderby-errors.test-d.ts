@@ -227,6 +227,8 @@ async function testValidWhereOrderByOperations() {
       content: string | null;
       published: boolean;
       created_at: Date;
+      categories: string[];
+      ratings: number[];
     }>
   >(result4);
 }

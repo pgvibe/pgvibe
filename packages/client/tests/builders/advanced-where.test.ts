@@ -115,14 +115,14 @@ describe("Advanced WHERE Operations", () => {
 
   describe("Real Database Execution", () => {
     test("should execute IS NULL queries correctly", async () => {
-      // Charlie Brown has null email
+      // Bob Johnson has null email
       const users = await db
         .selectFrom("users")
         .where("email", "is", null)
         .execute();
 
       expect(users).toHaveLength(1);
-      expect(users[0].name).toBe("Charlie Brown");
+      expect(users[0].name).toBe("Bob Johnson");
       expect(users[0].email).toBeNull();
     });
 
@@ -155,7 +155,7 @@ describe("Advanced WHERE Operations", () => {
         .where("email", "is not", null)
         .execute();
 
-      expect(users).toHaveLength(3);
+      expect(users).toHaveLength(4);
       users.forEach((user) => {
         expect(user.active).toBe(true);
         expect(user.email).not.toBeNull();

@@ -78,7 +78,7 @@ export class ArrayExpressionBuilder<
     return new ArrayContainmentExpression(
       this.column,
       "@>",
-      ExpressionNodeFactory.createArrayValue([...values] as unknown[], true)
+      ExpressionNodeFactory.createArrayValue([[...values] as unknown[]], true)
     );
   }
 
@@ -114,7 +114,7 @@ export class ArrayExpressionBuilder<
     return new ArrayContainmentExpression(
       this.column,
       "<@",
-      ExpressionNodeFactory.createArrayValue([...values] as unknown[], true)
+      ExpressionNodeFactory.createArrayValue([[...values] as unknown[]], true)
     );
   }
 
@@ -147,7 +147,7 @@ export class ArrayExpressionBuilder<
   ): Expression<SqlBool> {
     return new ArrayOverlapExpression(
       this.column,
-      ExpressionNodeFactory.createArrayValue([...values] as unknown[], true)
+      ExpressionNodeFactory.createArrayValue([[...values] as unknown[]], true)
     );
   }
 

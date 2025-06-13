@@ -41,8 +41,10 @@ describe("Array Operations", () => {
 
       const compiled = query.compile();
 
-      expect(compiled.sql).toBe("SELECT * FROM users WHERE tags @> ARRAY[$1]");
-      expect(compiled.parameters).toEqual([["typescript", "nodejs"]]);
+      expect(compiled.sql).toBe(
+        "SELECT * FROM users WHERE tags @> ARRAY[$1, $2]"
+      );
+      expect(compiled.parameters).toEqual(["typescript", "nodejs"]);
     });
 
     it("should generate correct SQL for number array contains", () => {
@@ -54,9 +56,9 @@ describe("Array Operations", () => {
       const compiled = query.compile();
 
       expect(compiled.sql).toBe(
-        "SELECT * FROM users WHERE scores @> ARRAY[$1]"
+        "SELECT * FROM users WHERE scores @> ARRAY[$1, $2]"
       );
-      expect(compiled.parameters).toEqual([[95, 100]]);
+      expect(compiled.parameters).toEqual([95, 100]);
     });
 
     it("should generate correct SQL for boolean array contains", () => {
@@ -68,9 +70,9 @@ describe("Array Operations", () => {
       const compiled = query.compile();
 
       expect(compiled.sql).toBe(
-        "SELECT * FROM users WHERE preferences @> ARRAY[$1]"
+        "SELECT * FROM users WHERE preferences @> ARRAY[$1, $2]"
       );
-      expect(compiled.parameters).toEqual([[true, false]]);
+      expect(compiled.parameters).toEqual([true, false]);
     });
   });
 
@@ -85,10 +87,10 @@ describe("Array Operations", () => {
 
       const compiled = query.compile();
 
-      expect(compiled.sql).toBe("SELECT * FROM users WHERE tags <@ ARRAY[$1]");
-      expect(compiled.parameters).toEqual([
-        ["frontend", "backend", "fullstack"],
-      ]);
+      expect(compiled.sql).toBe(
+        "SELECT * FROM users WHERE tags <@ ARRAY[$1, $2, $3]"
+      );
+      expect(compiled.parameters).toEqual(["frontend", "backend", "fullstack"]);
     });
 
     it("should work with different table in FROM clause", () => {
@@ -102,11 +104,9 @@ describe("Array Operations", () => {
       const compiled = query.compile();
 
       expect(compiled.sql).toBe(
-        "SELECT * FROM posts WHERE categories <@ ARRAY[$1]"
+        "SELECT * FROM posts WHERE categories <@ ARRAY[$1, $2, $3]"
       );
-      expect(compiled.parameters).toEqual([
-        ["tech", "programming", "tutorial"],
-      ]);
+      expect(compiled.parameters).toEqual(["tech", "programming", "tutorial"]);
     });
   });
 
@@ -121,8 +121,10 @@ describe("Array Operations", () => {
 
       const compiled = query.compile();
 
-      expect(compiled.sql).toBe("SELECT * FROM users WHERE tags && ARRAY[$1]");
-      expect(compiled.parameters).toEqual([["react", "vue", "angular"]]);
+      expect(compiled.sql).toBe(
+        "SELECT * FROM users WHERE tags && ARRAY[$1, $2, $3]"
+      );
+      expect(compiled.parameters).toEqual(["react", "vue", "angular"]);
     });
 
     it("should work with number arrays", () => {
@@ -134,9 +136,9 @@ describe("Array Operations", () => {
       const compiled = query.compile();
 
       expect(compiled.sql).toBe(
-        "SELECT * FROM posts WHERE ratings && ARRAY[$1]"
+        "SELECT * FROM posts WHERE ratings && ARRAY[$1, $2]"
       );
-      expect(compiled.parameters).toEqual([[4, 5]]);
+      expect(compiled.parameters).toEqual([4, 5]);
     });
   });
 
@@ -225,7 +227,7 @@ describe("Array Operations", () => {
       expect(compiled.sql).toBe(
         "SELECT * FROM users WHERE (tags @> ARRAY[$1] AND $2 = ANY(permissions))"
       );
-      expect(compiled.parameters).toEqual([["typescript"], "admin"]);
+      expect(compiled.parameters).toEqual(["typescript", "admin"]);
     });
 
     it("should combine array operations with OR", () => {
@@ -244,7 +246,7 @@ describe("Array Operations", () => {
       expect(compiled.sql).toBe(
         "SELECT * FROM users WHERE (tags && ARRAY[$1] OR tags && ARRAY[$2])"
       );
-      expect(compiled.parameters).toEqual([["frontend"], ["backend"]]);
+      expect(compiled.parameters).toEqual(["frontend", "backend"]);
     });
 
     it("should combine array operations with regular WHERE conditions", () => {
@@ -259,7 +261,7 @@ describe("Array Operations", () => {
       expect(compiled.sql).toBe(
         "SELECT * FROM users WHERE (name LIKE $1 AND tags @> ARRAY[$2])"
       );
-      expect(compiled.parameters).toEqual(["%John%", ["expert"]]);
+      expect(compiled.parameters).toEqual(["%John%", "expert"]);
     });
 
     it("should work with nested logical operations", () => {
@@ -281,7 +283,7 @@ describe("Array Operations", () => {
       expect(compiled.sql).toBe(
         "SELECT * FROM users WHERE ((($1 = ANY(permissions) OR $2 = ANY(permissions))) AND tags && ARRAY[$3])"
       );
-      expect(compiled.parameters).toEqual(["admin", "moderator", ["active"]]);
+      expect(compiled.parameters).toEqual(["admin", "moderator", "active"]);
     });
 
     it("should work with NOT operations", () => {
@@ -295,7 +297,7 @@ describe("Array Operations", () => {
       expect(compiled.sql).toBe(
         "SELECT * FROM users WHERE NOT (tags @> ARRAY[$1])"
       );
-      expect(compiled.parameters).toEqual([["deprecated"]]);
+      expect(compiled.parameters).toEqual(["deprecated"]);
     });
   });
 
@@ -312,7 +314,7 @@ describe("Array Operations", () => {
       expect(compiled.sql).toBe(
         "SELECT name, tags FROM users WHERE tags @> ARRAY[$1] ORDER BY name ASC"
       );
-      expect(compiled.parameters).toEqual([["featured"]]);
+      expect(compiled.parameters).toEqual(["featured"]);
     });
 
     it("should work with LIMIT and OFFSET", () => {
@@ -342,8 +344,10 @@ describe("Array Operations", () => {
 
       const compiled = query.compile();
 
-      expect(compiled.sql).toBe("SELECT * FROM users WHERE tags @> ARRAY[$1]");
-      expect(compiled.parameters).toEqual([[]]);
+      expect(compiled.sql).toBe(
+        "SELECT * FROM users WHERE tags @> ARRAY[]::text[]"
+      );
+      expect(compiled.parameters).toEqual([]);
     });
 
     it("should handle single element arrays", () => {
@@ -355,7 +359,7 @@ describe("Array Operations", () => {
       const compiled = query.compile();
 
       expect(compiled.sql).toBe("SELECT * FROM users WHERE tags && ARRAY[$1]");
-      expect(compiled.parameters).toEqual([["single"]]);
+      expect(compiled.parameters).toEqual(["single"]);
     });
 
     it("should handle arrays with mixed primitive types (numbers)", () => {
@@ -367,9 +371,9 @@ describe("Array Operations", () => {
       const compiled = query.compile();
 
       expect(compiled.sql).toBe(
-        "SELECT * FROM posts WHERE ratings @> ARRAY[$1]"
+        "SELECT * FROM posts WHERE ratings @> ARRAY[$1, $2, $3, $4, $5]"
       );
-      expect(compiled.parameters).toEqual([[1, 2, 3, 4, 5]]);
+      expect(compiled.parameters).toEqual([1, 2, 3, 4, 5]);
     });
   });
 
@@ -396,9 +400,9 @@ describe("Array Operations", () => {
 
       const compiled = query.compile();
 
-      // Validate that array structure is preserved
-      expect(Array.isArray(compiled.parameters[0])).toBe(true);
-      expect(compiled.parameters[0]).toEqual(testArray);
+      // Validate that individual parameters are used (not nested arrays)
+      expect(Array.isArray(compiled.parameters[0])).toBe(false);
+      expect(compiled.parameters).toEqual(testArray);
     });
   });
 });
