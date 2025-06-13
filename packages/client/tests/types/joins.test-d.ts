@@ -28,10 +28,15 @@ async function testInnerJoinSelectAll() {
       email: string | null;
       active: boolean;
       created_at: Date;
+      tags: string[];
+      permissions: string[];
+      scores: number[];
       user_id: number;
       title: string;
       content: string | null;
       published: boolean;
+      categories: string[];
+      ratings: number[];
     }>
   >(result);
 }

@@ -302,7 +302,23 @@ export class PostgresQueryCompiler {
     this.append(" ");
     this.visitNode(node.operator);
     this.append(" ");
-    this.visitNode(node.rightOperand);
+
+    // Special handling for IN and NOT IN operations - they need parentheses around array values
+    if (
+      node.operator.kind === "OperatorNode" &&
+      (node.operator.operator.toUpperCase() === "IN" ||
+        node.operator.operator.toUpperCase() === "NOT IN")
+    ) {
+      if (node.rightOperand.kind === "ArrayValueNode") {
+        this.append("(");
+        this.visitNode(node.rightOperand);
+        this.append(")");
+      } else {
+        this.visitNode(node.rightOperand);
+      }
+    } else {
+      this.visitNode(node.rightOperand);
+    }
   }
 
   /**
@@ -458,16 +474,33 @@ export class PostgresQueryCompiler {
    */
   private visitArrayValue(node: ArrayValueNode): void {
     if (node.isParameter) {
-      this.append("(");
-      for (let i = 0; i < node.values.length; i++) {
-        if (i > 0) {
-          this.append(", ");
+      // Check if this is a single array parameter (new array operations style)
+      if (node.values.length === 1 && Array.isArray(node.values[0])) {
+        // Single array parameter - expand the array elements as individual parameters
+        const arrayValue = node.values[0] as unknown[];
+
+        // Handle empty arrays - they will be handled by the parent visitor
+        if (arrayValue.length === 0) {
+          // Empty array - no parameters to add, type casting handled by parent
+          return;
         }
-        this.appendParameter(node.values[i]);
+
+        for (let i = 0; i < arrayValue.length; i++) {
+          if (i > 0) {
+            this.append(", ");
+          }
+          this.appendParameter(arrayValue[i]);
+        }
+      } else {
+        // Multiple individual parameters (legacy IN/NOT IN style)
+        for (let i = 0; i < node.values.length; i++) {
+          if (i > 0) {
+            this.append(", ");
+          }
+          this.appendParameter(node.values[i]);
+        }
       }
-      this.append(")");
     } else {
-      this.append("(");
       for (let i = 0; i < node.values.length; i++) {
         if (i > 0) {
           this.append(", ");
@@ -478,7 +511,6 @@ export class PostgresQueryCompiler {
           this.append(String(node.values[i]));
         }
       }
-      this.append(")");
     }
   }
 
@@ -556,6 +588,17 @@ export class PostgresQueryCompiler {
     this.append("ARRAY[");
     this.visitNode(node.values);
     this.append("]");
+
+    // Add type casting for empty arrays to avoid PostgreSQL type inference issues
+    if (
+      node.values.kind === "ArrayValueNode" &&
+      (node.values.values.length === 0 ||
+        (node.values.values.length === 1 &&
+          Array.isArray(node.values.values[0]) &&
+          node.values.values[0].length === 0))
+    ) {
+      this.append("::text[]");
+    }
   }
 
   /**
@@ -567,6 +610,17 @@ export class PostgresQueryCompiler {
     this.append("ARRAY[");
     this.visitNode(node.values);
     this.append("]");
+
+    // Add type casting for empty arrays to avoid PostgreSQL type inference issues
+    if (
+      node.values.kind === "ArrayValueNode" &&
+      (node.values.values.length === 0 ||
+        (node.values.values.length === 1 &&
+          Array.isArray(node.values.values[0]) &&
+          node.values.values[0].length === 0))
+    ) {
+      this.append("::text[]");
+    }
   }
 
   /**

@@ -19,6 +19,9 @@ async function testSelectAll() {
       email: string | null;
       active: boolean;
       created_at: Date;
+      tags: string[];
+      permissions: string[];
+      scores: number[];
     }>
   >(result);
 }
@@ -83,6 +86,8 @@ async function testPostsTable() {
       content: string | null;
       published: boolean;
       created_at: Date;
+      categories: string[];
+      ratings: number[];
     }>
   >(result);
 }
