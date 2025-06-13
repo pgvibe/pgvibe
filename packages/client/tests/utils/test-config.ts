@@ -2,7 +2,7 @@
 // Matches credentials from docker-compose.yml
 
 import { ZenQ } from "../../src/query-builder";
-import type { Database } from "./test-types";
+import type { Database, IntegrationTestDatabase } from "./test-types";
 
 /**
  * PostgreSQL connection configuration for tests
@@ -18,6 +18,14 @@ export const TEST_DATABASE_CONFIG = {
  */
 export function createTestDatabase(): ZenQ<Database> {
   return new ZenQ<Database>(TEST_DATABASE_CONFIG);
+}
+
+/**
+ * Create a ZenQ instance for integration testing with test table types
+ * Use this for integration tests that create their own test tables
+ */
+export function createIntegrationTestDatabase(): ZenQ<IntegrationTestDatabase> {
+  return new ZenQ<IntegrationTestDatabase>(TEST_DATABASE_CONFIG);
 }
 
 /**

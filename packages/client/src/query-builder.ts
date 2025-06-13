@@ -8,6 +8,7 @@ import type {
   UserTable,
   PostTable,
   CommentTable,
+  RawBuilder,
 } from "./core/shared-types";
 import {
   PostgreSQL,
@@ -17,6 +18,19 @@ import {
   createSelectQueryBuilder,
   type CreateSelectQueryBuilder,
 } from "./core/builders/select-query-builder";
+import {
+  createInsertQueryBuilder,
+  type CreateInsertQueryBuilder,
+} from "./core/builders/insert-query-builder";
+
+/**
+ * Raw SQL query result interface
+ */
+export interface RawQueryResult<T = any> {
+  rows: T[];
+  rowCount: number;
+  command: string;
+}
 
 /**
  * Main ZenQ class for PostgreSQL database queries
@@ -58,6 +72,109 @@ export class ZenQ<DB> {
   }
 
   /**
+   * Start building an INSERT query for the specified table with type-safe column validation
+   *
+   * @param table - The table name to insert into
+   * @returns An InsertQueryBuilder with type-safe value validation
+   */
+  insertInto<TE extends TableExpression<DB>>(
+    table: TE
+  ): CreateInsertQueryBuilder<DB, ExtractTableAlias<DB, TE>> {
+    return createInsertQueryBuilder<DB, ExtractTableAlias<DB, TE>>(
+      this.postgres,
+      table as ExtractTableAlias<DB, TE> & string
+    );
+  }
+
+  /**
+   * Execute raw SQL with parameters (similar to node-postgres)
+   *
+   * @param sql - Raw SQL string with parameter placeholders ($1, $2, etc.)
+   * @param parameters - Array of parameter values
+   * @returns Promise with query results
+   *
+   * @example
+   * ```typescript
+   * // Execute raw SQL with parameters
+   * await db.query('INSERT INTO users (name, email) VALUES ($1, $2)', ['John', 'john@example.com']);
+   *
+   * // Execute DDL statements
+   * await db.query('CREATE TABLE test_table (id SERIAL PRIMARY KEY, name VARCHAR(255))');
+   *
+   * // Execute complex queries
+   * const result = await db.query('SELECT * FROM users WHERE created_at > $1', [new Date('2024-01-01')]);
+   * ```
+   */
+  async query<T = any>(
+    sql: string,
+    parameters: unknown[] = []
+  ): Promise<RawQueryResult<T>> {
+    console.log(
+      `Executing raw SQL: ${sql}`,
+      parameters.length > 0 ? `with parameters:` : "",
+      parameters
+    );
+
+    const driver = this.postgres.getDriver();
+
+    // Ensure driver is initialized before acquiring connection
+    await driver.init();
+
+    const connection = await driver.acquireConnection();
+
+    try {
+      const result = await connection.executeQuery({
+        sql,
+        parameters,
+        query: null, // Raw queries don't have AST nodes
+      });
+
+      return {
+        rows: result.rows as T[],
+        rowCount: result.rowCount,
+        command: sql.trim().split(/\s+/)[0]?.toUpperCase() || "UNKNOWN",
+      };
+    } finally {
+      connection.release();
+    }
+  }
+
+  /**
+   * Execute raw SQL from a template literal with automatic parameterization
+   *
+   * @param strings - Template literal strings
+   * @param values - Template literal values (automatically parameterized)
+   * @returns Promise with query results
+   *
+   * @example
+   * ```typescript
+   * const userId = 123;
+   * const status = 'active';
+   *
+   * // This gets converted to: SELECT * FROM users WHERE id = $1 AND status = $2
+   * const users = await db.sql`SELECT * FROM users WHERE id = ${userId} AND status = ${status}`;
+   * ```
+   */
+  async sql<T = any>(
+    strings: TemplateStringsArray,
+    ...values: unknown[]
+  ): Promise<RawQueryResult<T>> {
+    // Convert template literal to parameterized SQL
+    let sql = "";
+    const parameters: unknown[] = [];
+
+    for (let i = 0; i < strings.length; i++) {
+      sql += strings[i];
+      if (i < values.length) {
+        parameters.push(values[i]);
+        sql += `$${parameters.length}`;
+      }
+    }
+
+    return this.query<T>(sql, parameters);
+  }
+
+  /**
    * Get the underlying PostgreSQL instance for advanced usage
    */
   getPostgreSQL(): PostgreSQL {
@@ -92,8 +209,6 @@ export type {
   UserTable,
   PostTable,
   CommentTable,
-  TableExpression,
-  ExtractTableAlias,
   RawBuilder,
 } from "./core/shared-types";
 
@@ -101,6 +216,15 @@ export type {
   SelectQueryBuilder,
   CreateSelectQueryBuilder,
 } from "./core/builders/select-query-builder";
+
+export type {
+  InsertQueryBuilder,
+  CreateInsertQueryBuilder,
+  InsertResult,
+  InsertReturningResult,
+  InsertReturningAllResult,
+  InsertObject,
+} from "./core/builders/insert-query-builder";
 
 export type { PostgreSQLConfig } from "./core/postgres/postgres-dialect";
 
@@ -121,6 +245,7 @@ export { PostgreSQL } from "./core/postgres/postgres-dialect";
 
 // Re-export for advanced usage
 export { SelectQueryNode } from "./core/ast/select-query-node";
+export { InsertQueryNode } from "./core/ast/insert-query-node";
 export { ExpressionNodeFactory } from "./core/ast/expression-nodes";
 
 // Re-export raw SQL template literals

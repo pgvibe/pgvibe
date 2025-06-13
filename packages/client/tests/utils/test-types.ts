@@ -45,6 +45,46 @@ export interface CommentTable {
 }
 
 /**
+ * Test Users table for integration tests
+ * Matches the schema created in insert-integration.test.ts
+ *
+ * For INSERT operations:
+ * - id is auto-generated (SERIAL), so it's optional for inserts
+ * - name is required (NOT NULL, no default)
+ * - email is nullable, so it's optional for inserts
+ * - active has a default (DEFAULT true), so it's optional for inserts
+ * - created_at has a default (DEFAULT CURRENT_TIMESTAMP), so it's optional for inserts
+ */
+export interface TestUserTable {
+  id?: number; // SERIAL PRIMARY KEY (auto-generated, optional for INSERT)
+  name: string; // VARCHAR(255) NOT NULL (required)
+  email?: string | null; // VARCHAR(255) UNIQUE (nullable, optional for INSERT)
+  active?: boolean; // BOOLEAN DEFAULT true (has default, optional for INSERT)
+  created_at?: Date; // TIMESTAMP DEFAULT CURRENT_TIMESTAMP (has default, optional for INSERT)
+}
+
+/**
+ * Test Posts table for integration tests
+ * Matches the schema created in insert-integration.test.ts
+ *
+ * For INSERT operations:
+ * - id is auto-generated (SERIAL), so it's optional for inserts
+ * - user_id is required (NOT NULL, no default)
+ * - title is required (NOT NULL, no default)
+ * - content is nullable, so it's optional for inserts
+ * - published has a default (DEFAULT false), so it's optional for inserts
+ * - created_at has a default (DEFAULT CURRENT_TIMESTAMP), so it's optional for inserts
+ */
+export interface TestPostTable {
+  id?: number; // SERIAL PRIMARY KEY (auto-generated, optional for INSERT)
+  user_id: number; // INTEGER REFERENCES test_users(id) (required)
+  title: string; // VARCHAR(255) NOT NULL (required)
+  content?: string | null; // TEXT (nullable, optional for INSERT)
+  published?: boolean; // BOOLEAN DEFAULT false (has default, optional for INSERT)
+  created_at?: Date; // TIMESTAMP DEFAULT CURRENT_TIMESTAMP (has default, optional for INSERT)
+}
+
+/**
  * JSONB Users table for testing JSONB operations
  */
 export interface JsonbUserTable {
@@ -97,6 +137,15 @@ export interface Database {
   comments: CommentTable;
   jsonb_users: JsonbUserTable;
   jsonb_products: JsonbProductTable;
+}
+
+/**
+ * Integration test database interface
+ * Used specifically for integration tests with real database tables
+ */
+export interface IntegrationTestDatabase {
+  test_users: TestUserTable;
+  test_posts: TestPostTable;
 }
 
 // Re-export createTestDatabase for convenience in type tests
