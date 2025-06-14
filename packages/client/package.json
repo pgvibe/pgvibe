@@ -19,7 +19,7 @@
     "clean": "rm -rf dist",
     "prepublishOnly": "bun run clean && bun run build",
     "test": "bun test tests/ && bun run test:types",
-    "test:types": "tsd --typings dist/index.d.ts --files \"tests/types/*.test-d.ts\"",
+    "test:types": "tsd --typings dist/index.d.ts --files \"tests/types/**/*.test-d.ts\"",
     "test:types:watch": "tsd --watch",
     "test:runtime": "bun test --ignore tests/types/",
     "test:integration": "bun test tests/integration/",

@@ -2,8 +2,8 @@
 // Tests that date/timestamp columns accept both Date objects and ISO date strings
 
 import { expectType, expectError } from "tsd";
-import { createTestDatabase } from "../utils/test-types";
-import type { Database } from "../utils/test-types";
+import { createTestDatabase } from "../../utils/test-config";
+import type { Database } from "../../utils/test-types";
 
 const db = createTestDatabase();
 

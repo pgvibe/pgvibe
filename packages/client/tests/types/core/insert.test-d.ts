@@ -2,10 +2,12 @@
 // These tests verify that our INSERT type system correctly handles operation-aware types
 
 import { expectType, expectError } from "tsd";
-import { createTestDatabase } from "../utils/test-types";
-import { createIntegrationTestDatabase } from "../utils/test-config";
-import type { Database, IntegrationTestDatabase } from "../utils/test-types";
-import type { InsertReturningAllResult } from "../../src/core/builders/insert-query-builder";
+import {
+  createTestDatabase,
+  createIntegrationTestDatabase,
+} from "../../utils/test-config";
+import type { Database, IntegrationTestDatabase } from "../../utils/test-types";
+import type { InsertReturningAllResult } from "../../../src/core/builders/insert-query-builder";
 
 const db = createTestDatabase();
 const integrationDb = createIntegrationTestDatabase();

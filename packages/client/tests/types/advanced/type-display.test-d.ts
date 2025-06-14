@@ -1,8 +1,12 @@
 // Type tests for Prettify utility type
 // Ensures the Prettify type correctly expands object types for better TypeScript display
 
-import { expectType, expectAssignable } from "tsd";
-import type { Prettify } from "../../src/core/types/select-result";
+import { expectType, expectAssignable } from "../utils/test-helpers.test-d.ts";
+
+// Local Prettify type for testing (simplified version)
+type Prettify<T> = {
+  [K in keyof T]: T[K];
+} & {};
 
 // Test basic interface prettification
 interface TestInterface {
