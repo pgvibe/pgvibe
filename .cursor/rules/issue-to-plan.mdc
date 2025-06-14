@@ -11,7 +11,7 @@ Structure the plan to encourage exploration and learning:
 - Allow flexibility in HOW goals are achieved
 - Build in checkpoints to validate approach before proceeding
 
-Focus on writing tests first if possible, and ask the user if the tests are correct. Run tests often, and ensure you are moving towards tests passing.
+In the plan, ensure that we do TDD and that we start by writing tests, ensure tehy run and fail (as expected) and then we continuesly work towards making them pass. We should run tests often.
 
 Organize phases so we can implement one at a time, with each phase building on learnings from previous phases. Focus on goals and outcomes rather than specific tasks.
 
