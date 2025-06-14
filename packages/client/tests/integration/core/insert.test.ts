@@ -1,5 +1,5 @@
-// INSERT integration tests with real database operations
-// Tests actual database INSERT, RETURNING, and ON CONFLICT operations
+// INSERT Integration Tests
+// Tests INSERT operations with isolated test tables
 
 import {
   describe,
@@ -9,56 +9,47 @@ import {
   afterAll,
   beforeEach,
 } from "bun:test";
+import { ZenQ } from "../../../src/query-builder";
 import {
-  createIntegrationTestDatabase,
+  generateTestId,
+  createTestDatabase,
   waitForDatabase,
-} from "../utils/test-config";
+} from "../utils/test-helpers";
+import {
+  createMinimalTestTables,
+  createTestTables,
+} from "../utils/table-factory";
+import { performTestCleanup } from "../utils/cleanup";
 
 describe("INSERT Integration Tests", () => {
-  const db = createIntegrationTestDatabase();
+  const testId = generateTestId();
+  const tables = createMinimalTestTables(testId);
+  let db: ZenQ<any>;
 
   beforeAll(async () => {
-    // Wait for database to be ready
+    db = createTestDatabase();
     await waitForDatabase();
 
-    // Create test tables if they don't exist
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS test_users (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        email VARCHAR(255) UNIQUE,
-        active BOOLEAN DEFAULT true,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS test_posts (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES test_users(id),
-        title VARCHAR(255) NOT NULL,
-        content TEXT,
-        published BOOLEAN DEFAULT false,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+    // Create isolated test tables
+    await createTestTables(db, tables);
   });
 
   beforeEach(async () => {
-    // Clean up data before each test
-    await db.query("TRUNCATE test_posts, test_users RESTART IDENTITY CASCADE");
+    // Clean up data before each test to ensure isolation
+    await db.query(
+      `TRUNCATE ${tables.posts.name}, ${tables.users.name} RESTART IDENTITY CASCADE`
+    );
   });
 
   afterAll(async () => {
-    // Clean up tables after all tests
-    await db.query("DROP TABLE IF EXISTS test_posts");
-    await db.query("DROP TABLE IF EXISTS test_users");
+    // Clean up our isolated tables
+    await performTestCleanup(db, [tables.users.name, tables.posts.name]);
   });
 
   describe("Basic INSERT Operations", () => {
     test("should insert a single user and return affected rows", async () => {
       const result = await db
-        .insertInto("test_users")
+        .insertInto(tables.users.name)
         .values({
           name: "John Doe",
           email: "john@example.com",
@@ -71,7 +62,7 @@ describe("INSERT Integration Tests", () => {
 
     test("should insert a user with minimal required fields", async () => {
       const result = await db
-        .insertInto("test_users")
+        .insertInto(tables.users.name)
         .values({
           name: "Jane Doe",
         })
@@ -82,7 +73,7 @@ describe("INSERT Integration Tests", () => {
 
     test("should insert multiple users in bulk", async () => {
       const result = await db
-        .insertInto("test_users")
+        .insertInto(tables.users.name)
         .values([
           { name: "John Doe", email: "john@example.com", active: true },
           { name: "Jane Smith", email: "jane@example.com", active: false },
@@ -95,7 +86,7 @@ describe("INSERT Integration Tests", () => {
 
     test("should handle null values correctly", async () => {
       const result = await db
-        .insertInto("test_users")
+        .insertInto(tables.users.name)
         .values({
           name: "John Doe",
           email: null, // Nullable field
@@ -110,7 +101,7 @@ describe("INSERT Integration Tests", () => {
   describe("RETURNING Clause", () => {
     test("should return specific columns after insert", async () => {
       const result = await db
-        .insertInto("test_users")
+        .insertInto(tables.users.name)
         .values({
           name: "John Doe",
           email: "john@example.com",
@@ -129,7 +120,7 @@ describe("INSERT Integration Tests", () => {
 
     test("should return all columns with returningAll()", async () => {
       const result = await db
-        .insertInto("test_users")
+        .insertInto(tables.users.name)
         .values({
           name: "Jane Smith",
           email: "jane@example.com",
@@ -149,7 +140,7 @@ describe("INSERT Integration Tests", () => {
 
     test("should return data from bulk insert", async () => {
       const result = await db
-        .insertInto("test_users")
+        .insertInto(tables.users.name)
         .values([
           { name: "John Doe", email: "john@example.com" },
           { name: "Jane Smith", email: "jane@example.com" },
@@ -170,7 +161,7 @@ describe("INSERT Integration Tests", () => {
     test("should handle ON CONFLICT DO NOTHING", async () => {
       // First insert
       await db
-        .insertInto("test_users")
+        .insertInto(tables.users.name)
         .values({
           name: "John Doe",
           email: "john@example.com",
@@ -180,7 +171,7 @@ describe("INSERT Integration Tests", () => {
 
       // Second insert with same email should be ignored
       const result = await db
-        .insertInto("test_users")
+        .insertInto(tables.users.name)
         .values({
           name: "John Updated",
           email: "john@example.com", // Duplicate email
@@ -193,7 +184,7 @@ describe("INSERT Integration Tests", () => {
 
       // Verify original data wasn't changed
       const users = await db
-        .selectFrom("test_users")
+        .selectFrom(tables.users.name)
         .select(["name", "active"])
         .where("email", "=", "john@example.com")
         .execute();
@@ -206,7 +197,7 @@ describe("INSERT Integration Tests", () => {
     test("should handle ON CONFLICT DO UPDATE", async () => {
       // First insert
       await db
-        .insertInto("test_users")
+        .insertInto(tables.users.name)
         .values({
           name: "John Doe",
           email: "john@example.com",
@@ -216,7 +207,7 @@ describe("INSERT Integration Tests", () => {
 
       // Second insert with update on conflict
       const result = await db
-        .insertInto("test_users")
+        .insertInto(tables.users.name)
         .values({
           name: "John Updated",
           email: "john@example.com", // Duplicate email
@@ -234,7 +225,7 @@ describe("INSERT Integration Tests", () => {
 
       // Verify data was updated
       const users = await db
-        .selectFrom("test_users")
+        .selectFrom(tables.users.name)
         .select(["name", "active"])
         .where("email", "=", "john@example.com")
         .execute();
@@ -247,7 +238,7 @@ describe("INSERT Integration Tests", () => {
     test("should handle ON CONFLICT with RETURNING", async () => {
       // First insert
       await db
-        .insertInto("test_users")
+        .insertInto(tables.users.name)
         .values({
           name: "John Doe",
           email: "john@example.com",
@@ -257,7 +248,7 @@ describe("INSERT Integration Tests", () => {
 
       // Conflict with update and returning
       const result = await db
-        .insertInto("test_users")
+        .insertInto(tables.users.name)
         .values({
           name: "John New",
           email: "john@example.com",
@@ -279,9 +270,8 @@ describe("INSERT Integration Tests", () => {
     });
 
     test("should handle multiple conflict columns", async () => {
-      // Create a unique constraint on name + email combination (simulated with single column for this test)
       await db
-        .insertInto("test_users")
+        .insertInto(tables.users.name)
         .values({
           name: "John Doe",
           email: "john@example.com",
@@ -289,7 +279,7 @@ describe("INSERT Integration Tests", () => {
         .execute();
 
       const result = await db
-        .insertInto("test_users")
+        .insertInto(tables.users.name)
         .values({
           name: "John Doe",
           email: "john@example.com", // Same combination
@@ -306,7 +296,7 @@ describe("INSERT Integration Tests", () => {
     test("should work with foreign key relationships", async () => {
       // First create a user
       const userResult = await db
-        .insertInto("test_users")
+        .insertInto(tables.users.name)
         .values({
           name: "John Doe",
           email: "john@example.com",
@@ -319,7 +309,7 @@ describe("INSERT Integration Tests", () => {
 
       // Then create a post for that user
       const postResult = await db
-        .insertInto("test_posts")
+        .insertInto(tables.posts.name)
         .values({
           user_id: userId!,
           title: "My First Post",
@@ -341,18 +331,24 @@ describe("INSERT Integration Tests", () => {
         active: i % 2 === 0,
       }));
 
-      const result = await db.insertInto("test_users").values(users).execute();
+      const result = await db
+        .insertInto(tables.users.name)
+        .values(users)
+        .execute();
 
       expect(result.affectedRows).toBe(50);
 
       // Verify data was inserted
-      const count = await db.selectFrom("test_users").select(["id"]).execute();
+      const count = await db
+        .selectFrom(tables.users.name)
+        .select(["id"])
+        .execute();
       expect(count).toHaveLength(50);
     });
 
     test("should handle default values", async () => {
       const result = await db
-        .insertInto("test_users")
+        .insertInto(tables.users.name)
         .values({
           name: "John Doe",
           email: "john@example.com",
@@ -370,7 +366,7 @@ describe("INSERT Integration Tests", () => {
     test("should handle constraint violations", async () => {
       // First insert
       await db
-        .insertInto("test_users")
+        .insertInto(tables.users.name)
         .values({
           name: "John Doe",
           email: "john@example.com",
@@ -380,7 +376,7 @@ describe("INSERT Integration Tests", () => {
       // Second insert with same email should fail without ON CONFLICT
       await expect(
         db
-          .insertInto("test_users")
+          .insertInto(tables.users.name)
           .values({
             name: "Jane Doe",
             email: "john@example.com", // Duplicate email
@@ -393,10 +389,10 @@ describe("INSERT Integration Tests", () => {
       // This should fail because name is required but we're not providing it
       await expect(
         db
-          .insertInto("test_users")
+          .insertInto(tables.users.name)
           .values({
             email: "john@example.com",
-          }) // Type assertion to bypass compile-time check
+          } as any) // Type assertion to bypass compile-time check
           .execute()
       ).rejects.toThrow();
     });
@@ -404,7 +400,7 @@ describe("INSERT Integration Tests", () => {
     test("should handle invalid foreign key", async () => {
       await expect(
         db
-          .insertInto("test_posts")
+          .insertInto(tables.posts.name)
           .values({
             user_id: 99999, // Non-existent user
             title: "Test Post",
@@ -416,15 +412,15 @@ describe("INSERT Integration Tests", () => {
 
   describe("Raw SQL for Complex Cases", () => {
     test("should work with template literal raw SQL", async () => {
-      const userId = 123;
       const email = "test@example.com";
 
-      // Insert using template literal
-      const result = await db.sql`
-        INSERT INTO test_users (name, email) 
-        VALUES ('Template User', ${email})
-        RETURNING id, name, email
-      `;
+      // Insert using template literal - we need to use string interpolation for table names
+      const result = await db.query(
+        `INSERT INTO ${tables.users.name} (name, email) 
+         VALUES ('Template User', $1)
+         RETURNING id, name, email`,
+        [email]
+      );
 
       expect(result.rows).toHaveLength(1);
       expect(result.rows[0]?.name).toBe("Template User");
@@ -434,7 +430,7 @@ describe("INSERT Integration Tests", () => {
     test("should work with query method", async () => {
       const result = await db.query(
         `
-        INSERT INTO test_users (name, email) 
+        INSERT INTO ${tables.users.name} (name, email) 
         VALUES ($1, $2)
         RETURNING id, name, email
       `,

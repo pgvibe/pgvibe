@@ -4,6 +4,8 @@ This document outlines planned advanced PostgreSQL features for ZenQ after the F
 
 ## PostgreSQL Advanced Features
 
+### Alias support
+
 ### Window Functions
 
 - **Window function AST nodes**

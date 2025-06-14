@@ -26,26 +26,30 @@ export type InsertReturningResult<
   DB,
   TB extends keyof DB,
   K extends readonly ColumnReference<DB, TB>[]
-> = {
-  readonly [P in K[number] as P extends `${infer Table}.${infer Column}`
-    ? Column
-    : P]: P extends `${infer Table}.${infer Column}`
-    ? Table extends TB
-      ? Column extends keyof DB[Table]
-        ? ExtractBaseType<DB[Table][Column]>
+> = Prettify<
+  {
+    [P in K[number] as P extends `${infer Table}.${infer Column}`
+      ? Column
+      : P]: P extends `${infer Table}.${infer Column}`
+      ? Table extends TB
+        ? Column extends keyof DB[Table]
+          ? ExtractBaseType<DB[Table][Column]>
+          : never
         : never
-      : never
-    : P extends keyof DB[TB]
-    ? ExtractBaseType<DB[TB][P]>
-    : never;
-}[];
+      : P extends keyof DB[TB]
+      ? ExtractBaseType<DB[TB][P]>
+      : never;
+  }[]
+>;
 
 /**
  * Result type for INSERT operations with RETURNING *
  */
-export type InsertReturningAllResult<DB, TB extends keyof DB> = {
-  [K in keyof DB[TB]]: ExtractBaseType<DB[TB][K]>;
-}[];
+export type InsertReturningAllResult<DB, TB extends keyof DB> = Prettify<
+  {
+    [K in keyof DB[TB]]: ExtractBaseType<DB[TB][K]>;
+  }[]
+>;
 
 /**
  * Insert value type for a specific table

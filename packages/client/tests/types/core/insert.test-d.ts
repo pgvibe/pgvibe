@@ -260,7 +260,7 @@ async function testReturningClauseFunctionality() {
     .execute();
 
   // Should return array of objects with only id and name
-  expectType<{ readonly id: number; readonly name: string }[]>(result1);
+  expectType<{ id: number; name: string }[]>(result1);
 
   // Test returning all columns - should return array of objects with all table columns
   const result2 = await integrationDb
@@ -285,9 +285,9 @@ async function testReturningClauseFunctionality() {
 
   expectType<
     {
-      readonly id: number;
-      readonly name: string;
-      readonly email: string | null;
+      id: number;
+      name: string;
+      email: string | null;
     }[]
   >(result3);
 
@@ -304,9 +304,9 @@ async function testReturningClauseFunctionality() {
 
   expectType<
     {
-      readonly id: number;
-      readonly title: string;
-      readonly published: boolean;
+      id: number;
+      title: string;
+      published: boolean;
     }[]
   >(result4);
 
@@ -331,7 +331,7 @@ async function testReturningClauseFunctionality() {
     .returning(["id"])
     .execute();
 
-  expectType<{ readonly id: number }[]>(result6);
+  expectType<{ id: number }[]>(result6);
 
   // Test returning with regular tables (non-semantic columns)
   const result7 = await db
@@ -351,9 +351,9 @@ async function testReturningClauseFunctionality() {
 
   expectType<
     {
-      readonly id: number;
-      readonly name: string;
-      readonly email: string | null;
+      id: number;
+      name: string;
+      email: string | null;
     }[]
   >(result7);
 }
