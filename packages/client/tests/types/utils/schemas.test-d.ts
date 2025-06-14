@@ -1,12 +1,12 @@
-// Test database types for ZenQ type testing
-// These types are used in tests and should match the database schema examples
+// Test database schemas for type tests
+// This file consolidates all database schema definitions used in type testing
 
-import type { JsonbType } from "../../src/core/builders/expression-builder";
+import type { JsonbType } from "../../../src/core/builders/expression-builder";
 import type {
   Generated,
   WithDefault,
   Nullable,
-} from "../../src/core/types/utility-types";
+} from "../../../src/core/types/utility-types";
 
 /**
  * User table type for testing with all columns from examples
@@ -51,11 +51,7 @@ export interface CommentTable {
 
 /**
  * Test Users table for integration tests
- * Matches the schema created in insert-integration.test.ts
- * Uses utility types to encode database semantics:
- * - Generated<T>: Auto-generated columns (SERIAL, etc.)
- * - WithDefault<T>: Columns with database defaults
- * - Nullable<T>: Columns that can be NULL
+ * Uses utility types to encode database semantics
  */
 export interface TestUserTable {
   id: Generated<number>; // SERIAL PRIMARY KEY (auto-generated)
@@ -67,11 +63,7 @@ export interface TestUserTable {
 
 /**
  * Test Posts table for integration tests
- * Matches the schema created in insert-integration.test.ts
- * Uses utility types to encode database semantics:
- * - Generated<T>: Auto-generated columns (SERIAL, etc.)
- * - WithDefault<T>: Columns with database defaults
- * - Nullable<T>: Columns that can be NULL
+ * Uses utility types to encode database semantics
  */
 export interface TestPostTable {
   id: Generated<number>; // SERIAL PRIMARY KEY (auto-generated)
@@ -139,12 +131,8 @@ export interface Database {
 
 /**
  * Integration test database interface
- * Used specifically for integration tests with real database tables
  */
 export interface IntegrationTestDatabase {
   test_users: TestUserTable;
   test_posts: TestPostTable;
 }
-
-// Re-export createTestDatabase for convenience in type tests
-export { createTestDatabase } from "./test-config";

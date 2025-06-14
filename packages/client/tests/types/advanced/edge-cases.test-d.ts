@@ -2,8 +2,8 @@
 // These tests verify that ZenQ handles edge cases and boundary conditions correctly
 
 import { expectType, expectError } from "tsd";
-import { createTestDatabase } from "../utils/test-types";
-import type { Database } from "../utils/test-types";
+import { createTestDatabase } from "../../utils/test-config";
+import type { Database } from "../../utils/test-types";
 
 const db = createTestDatabase();
 

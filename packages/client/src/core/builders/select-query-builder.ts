@@ -15,6 +15,7 @@ import { ExpressionNodeFactory } from "../ast/expression-nodes";
 import type { PostgreSQL } from "../postgres/postgres-dialect";
 import type { RawBuilder } from "../shared-types";
 import type { SelectResult, SelectAllResult } from "../types/select-result";
+import type { Prettify } from "../types/select-result";
 import type { ValidateColumnAccess } from "../errors/validation-utils";
 import type { Expression, SqlBool } from "../types/expression";
 import {
@@ -1122,11 +1123,12 @@ export class SelectQueryBuilderImpl<
 
 /**
  * Type helper for creating SelectQueryBuilder instances
+ * Uses Prettify to ensure TypeScript displays the expanded object type
  */
 export type CreateSelectQueryBuilder<
   DB,
   TB extends keyof DB
-> = SelectQueryBuilder<DB, TB, DB[TB]>;
+> = SelectQueryBuilder<DB, TB, Prettify<DB[TB]>>;
 
 /**
  * Factory function for creating SelectQueryBuilder instances

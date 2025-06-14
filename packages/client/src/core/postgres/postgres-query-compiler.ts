@@ -16,6 +16,16 @@ import type {
   OnNode,
 } from "../ast/select-query-node";
 import type {
+  InsertQueryNode,
+  IntoNode,
+  ValuesNode,
+  ValueRowNode,
+  ColumnValueNode,
+  ReturningNode,
+  OnConflictNode,
+  ColumnUpdateNode,
+} from "../ast/insert-query-node";
+import type {
   BinaryOperationNode,
   ReferenceNode,
   ValueNode,
@@ -71,8 +81,32 @@ export class PostgresQueryCompiler {
       case "SelectQueryNode":
         this.visitSelectQuery(node as SelectQueryNode);
         break;
+      case "InsertQueryNode":
+        this.visitInsertQuery(node as InsertQueryNode);
+        break;
       case "FromNode":
         this.visitFrom(node as FromNode);
+        break;
+      case "IntoNode":
+        this.visitInto(node as IntoNode);
+        break;
+      case "ValuesNode":
+        this.visitValues(node as ValuesNode);
+        break;
+      case "ValueRowNode":
+        this.visitValueRow(node as ValueRowNode);
+        break;
+      case "ColumnValueNode":
+        this.visitColumnValue(node as ColumnValueNode);
+        break;
+      case "ReturningNode":
+        this.visitReturning(node as ReturningNode);
+        break;
+      case "OnConflictNode":
+        this.visitOnConflict(node as OnConflictNode);
+        break;
+      case "ColumnUpdateNode":
+        this.visitColumnUpdate(node as ColumnUpdateNode);
         break;
       case "SelectionNode":
         this.visitSelection(node as SelectionNode);
@@ -682,6 +716,12 @@ export class PostgresQueryCompiler {
    * PostgreSQL uses double quotes for identifier quoting
    */
   private appendIdentifier(identifier: string): void {
+    // Special case for * (wildcard) - never quote it
+    if (identifier === "*") {
+      this.append(identifier);
+      return;
+    }
+
     // Check if identifier needs quoting (contains spaces, reserved words, etc.)
     if (this.needsQuoting(identifier)) {
       this.append(`"${identifier.replace(/"/g, '""')}"`);
@@ -769,5 +809,145 @@ export class PostgresQueryCompiler {
     ]);
 
     return reservedWords.has(identifier.toLowerCase());
+  }
+
+  /**
+   * Visit an INSERT query node
+   */
+  private visitInsertQuery(node: InsertQueryNode): void {
+    this.append("INSERT");
+
+    // Handle INTO clause
+    if (node.into) {
+      this.append(" ");
+      this.visitNode(node.into);
+    }
+
+    // Handle VALUES clause
+    if (node.values) {
+      this.append(" ");
+      this.visitNode(node.values);
+    }
+
+    // Handle ON CONFLICT clause
+    if (node.onConflict) {
+      this.append(" ");
+      this.visitNode(node.onConflict);
+    }
+
+    // Handle RETURNING clause
+    if (node.returning) {
+      this.append(" ");
+      this.visitNode(node.returning);
+    }
+  }
+
+  /**
+   * Visit an INTO node
+   */
+  private visitInto(node: IntoNode): void {
+    this.append("INTO ");
+    this.appendIdentifier(node.table);
+  }
+
+  /**
+   * Visit a VALUES node
+   */
+  private visitValues(node: ValuesNode): void {
+    if (node.values.length === 0) {
+      throw new Error("VALUES clause cannot be empty");
+    }
+
+    // Get column names from the first row
+    const firstRow = node.values[0];
+    if (!firstRow || firstRow.values.length === 0) {
+      throw new Error("VALUE row cannot be empty");
+    }
+
+    // Generate column list
+    this.append("(");
+    const columnNames = firstRow.values.map((colVal) => colVal.column);
+    columnNames.forEach((column, index) => {
+      if (index > 0) this.append(", ");
+      this.appendIdentifier(column);
+    });
+    this.append(") VALUES ");
+
+    // Generate VALUES rows
+    this.visitNodeList(node.values, ", ");
+  }
+
+  /**
+   * Visit a VALUE ROW node
+   */
+  private visitValueRow(node: ValueRowNode): void {
+    this.append("(");
+    this.visitNodeList(
+      node.values.map((colVal) => colVal.value),
+      ", "
+    );
+    this.append(")");
+  }
+
+  /**
+   * Visit a COLUMN VALUE node
+   */
+  private visitColumnValue(node: ColumnValueNode): void {
+    // This shouldn't be called directly, as column values are handled in visitValueRow
+    this.visitNode(node.value);
+  }
+
+  /**
+   * Visit a RETURNING node
+   */
+  private visitReturning(node: ReturningNode): void {
+    this.append("RETURNING ");
+    this.visitNodeList(node.selections, ", ");
+  }
+
+  /**
+   * Visit an ON CONFLICT node
+   */
+  private visitOnConflict(node: OnConflictNode): void {
+    this.append("ON CONFLICT");
+
+    // Handle conflict target
+    if (node.columns && node.columns.length > 0) {
+      this.append(" (");
+      node.columns.forEach((column, index) => {
+        if (index > 0) this.append(", ");
+        this.appendIdentifier(column);
+      });
+      this.append(")");
+    } else if (node.constraint) {
+      this.append(" ON CONSTRAINT ");
+      this.appendIdentifier(node.constraint);
+    } else if (node.indexExpression) {
+      this.append(" (");
+      this.visitNode(node.indexExpression);
+      this.append(")");
+    }
+
+    // Handle conflict action
+    if (node.doNothing) {
+      this.append(" DO NOTHING");
+    } else if (node.updates && node.updates.length > 0) {
+      this.append(" DO UPDATE SET ");
+      this.visitNodeList(node.updates, ", ");
+
+      if (node.updateWhere) {
+        this.append(" WHERE ");
+        this.visitNode(node.updateWhere);
+      }
+    }
+  }
+
+  /**
+   * Visit a COLUMN UPDATE node
+   */
+  private visitColumnUpdate(node: ColumnUpdateNode): void {
+    this.appendIdentifier(node.column);
+    this.append(" = ");
+    this.visitNode(node.value);
   }
 }

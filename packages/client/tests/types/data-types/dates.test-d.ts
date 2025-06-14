@@ -2,8 +2,8 @@
 // Tests that date/timestamp columns accept both Date objects and ISO date strings
 
 import { expectType, expectError } from "tsd";
-import { createTestDatabase } from "../utils/test-types";
-import type { Database } from "../utils/test-types";
+import { createTestDatabase } from "../../utils/test-config";
+import type { Database } from "../../utils/test-types";
 
 const db = createTestDatabase();
 
@@ -146,7 +146,7 @@ async function testVariousDateOperators() {
 // ❌ Test 8: Date strings should NOT work for string columns
 function testDateStringsFailForOtherTypes() {
   expectError(
-    db.selectFrom("users").select(["name"]).where("name", ">", "2023-01-01") // Date comparison on string column should fail
+    db.selectFrom("users").select(["id"]).where("id", ">", "2023-01-01") // Date string on number column should fail
   );
 
   // This test is actually working correctly (rejecting date strings for number columns)

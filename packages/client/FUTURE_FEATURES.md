@@ -4,11 +4,7 @@ This document outlines planned advanced PostgreSQL features for ZenQ after the F
 
 ## PostgreSQL Advanced Features
 
-### Array Support
-
-- **Array operators**: `ANY`, `ALL`, `@>`, `<@`, `&&`
-- **Type-safe array query methods**
-- **Array AST nodes and compilation**
+### Alias support
 
 ### Window Functions
 

@@ -36,7 +36,7 @@ export type UnionToIntersection<U> = (
  * Type utility that forces TypeScript to fully expand and resolve types
  * This makes hover tooltips show the actual object structure instead of type aliases
  */
-type Prettify<T> = {
+export type Prettify<T> = {
   [K in keyof T]: T[K];
 } & {};
 
