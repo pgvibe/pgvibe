@@ -205,7 +205,7 @@ async function testValidWhereOrderByOperations() {
     .selectFrom("users")
     .select(["id", "name"])
     .where("active", "=", true)
-    .where("email", "!=", null)
+    .where("email", "!=", undefined)
     .orderBy("name", "asc")
     .limit(10)
     .execute();
@@ -216,7 +216,7 @@ async function testValidWhereOrderByOperations() {
     .selectFrom("posts")
     .selectAll()
     .where("published", "=", true)
-    .where("content", "!=", null)
+    .where("content", "!=", undefined)
     .orderBy("title", "asc")
     .execute();
   expectType<
