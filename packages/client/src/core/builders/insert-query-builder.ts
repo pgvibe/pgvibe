@@ -5,6 +5,7 @@ import { InsertQueryNode } from "../ast/insert-query-node";
 import type { PostgreSQL } from "../postgres/postgres-dialect";
 import type { ColumnReference } from "./select-query-builder";
 import type { InsertType, ExtractBaseType } from "../types/utility-types";
+import type { Prettify } from "../types/select-result";
 
 /**
  * Result type for INSERT operations without RETURNING clause
@@ -12,6 +13,11 @@ import type { InsertType, ExtractBaseType } from "../types/utility-types";
 export interface InsertResult {
   readonly affectedRows: number;
 }
+
+/**
+ * Prettified result type for INSERT operations
+ */
+export type PrettifiedInsertResult = Prettify<InsertResult>;
 
 /**
  * Result type for INSERT operations with RETURNING clause
@@ -64,20 +70,20 @@ export interface OnConflictBuilder<DB, TB extends keyof DB> {
  * OnConflict column builder for specific conflict actions
  */
 export interface OnConflictColumnBuilder<DB, TB extends keyof DB> {
-  doNothing(): InsertQueryBuilder<DB, TB, InsertResult>;
+  doNothing(): InsertQueryBuilder<DB, TB, PrettifiedInsertResult>;
   doUpdate(
     updates: Partial<InsertObject<DB, TB>>
-  ): InsertQueryBuilder<DB, TB, InsertResult>;
+  ): InsertQueryBuilder<DB, TB, PrettifiedInsertResult>;
 }
 
 /**
  * OnConflict constraint builder for constraint-based conflicts
  */
 export interface OnConflictConstraintBuilder<DB, TB extends keyof DB> {
-  doNothing(): InsertQueryBuilder<DB, TB, InsertResult>;
+  doNothing(): InsertQueryBuilder<DB, TB, PrettifiedInsertResult>;
   doUpdate(
     updates: Partial<InsertObject<DB, TB>>
-  ): InsertQueryBuilder<DB, TB, InsertResult>;
+  ): InsertQueryBuilder<DB, TB, PrettifiedInsertResult>;
 }
 
 /**
@@ -89,7 +95,7 @@ export interface InsertQueryBuilder<DB, TB extends keyof DB, O> {
    */
   values(
     values: InsertObject<DB, TB> | readonly InsertObject<DB, TB>[]
-  ): InsertQueryBuilder<DB, TB, InsertResult>;
+  ): InsertQueryBuilder<DB, TB, PrettifiedInsertResult>;
 
   /**
    * Add RETURNING clause for specific columns
@@ -137,16 +143,18 @@ export interface InsertQueryBuilder<DB, TB extends keyof DB, O> {
 class OnConflictBuilderImpl<DB, TB extends keyof DB>
   implements OnConflictBuilder<DB, TB>
 {
+  constructor(private insertBuilder: InsertQueryBuilderImpl<DB, TB, any>) {}
+
   column(column: keyof DB[TB] & string): OnConflictColumnBuilder<DB, TB> {
-    return new OnConflictColumnBuilderImpl([column]);
+    return new OnConflictColumnBuilderImpl([column], this.insertBuilder);
   }
 
   columns(columns: (keyof DB[TB] & string)[]): OnConflictColumnBuilder<DB, TB> {
-    return new OnConflictColumnBuilderImpl(columns);
+    return new OnConflictColumnBuilderImpl(columns, this.insertBuilder);
   }
 
   constraint(constraint: string): OnConflictConstraintBuilder<DB, TB> {
-    return new OnConflictConstraintBuilderImpl(constraint);
+    return new OnConflictConstraintBuilderImpl(constraint, this.insertBuilder);
   }
 }
 
@@ -156,23 +164,42 @@ class OnConflictBuilderImpl<DB, TB extends keyof DB>
 class OnConflictColumnBuilderImpl<DB, TB extends keyof DB>
   implements OnConflictColumnBuilder<DB, TB>
 {
-  constructor(private columns: string[]) {}
+  constructor(
+    private columns: string[],
+    private builder: InsertQueryBuilderImpl<DB, TB, any>
+  ) {}
 
-  doNothing(): InsertQueryBuilder<DB, TB, InsertResult> {
+  doNothing(): InsertQueryBuilder<DB, TB, PrettifiedInsertResult> {
     const onConflictNode = InsertQueryNode.createOnConflictDoNothingNode(
       this.columns
     );
-    return { onConflictNode } as any; // This will be handled by the main builder
+    const newNode = InsertQueryNode.cloneWithOnConflict(
+      this.builder.node,
+      onConflictNode
+    );
+    return new InsertQueryBuilderImpl<DB, TB, PrettifiedInsertResult>(
+      this.builder.tableName,
+      this.builder.postgres,
+      newNode
+    );
   }
 
   doUpdate(
     updates: Partial<InsertObject<DB, TB>>
-  ): InsertQueryBuilder<DB, TB, InsertResult> {
+  ): InsertQueryBuilder<DB, TB, PrettifiedInsertResult> {
     const onConflictNode = InsertQueryNode.createOnConflictDoUpdateNode(
       this.columns,
       updates as Record<string, unknown>
     );
-    return { onConflictNode } as any; // This will be handled by the main builder
+    const newNode = InsertQueryNode.cloneWithOnConflict(
+      this.builder.node,
+      onConflictNode
+    );
+    return new InsertQueryBuilderImpl<DB, TB, PrettifiedInsertResult>(
+      this.builder.tableName,
+      this.builder.postgres,
+      newNode
+    );
   }
 }
 
@@ -182,21 +209,32 @@ class OnConflictColumnBuilderImpl<DB, TB extends keyof DB>
 class OnConflictConstraintBuilderImpl<DB, TB extends keyof DB>
   implements OnConflictConstraintBuilder<DB, TB>
 {
-  constructor(private constraint: string) {}
+  constructor(
+    private constraint: string,
+    private builder: InsertQueryBuilderImpl<DB, TB, any>
+  ) {}
 
-  doNothing(): InsertQueryBuilder<DB, TB, InsertResult> {
+  doNothing(): InsertQueryBuilder<DB, TB, PrettifiedInsertResult> {
     // Create constraint-based conflict node
     const onConflictNode = {
       kind: "OnConflictNode" as const,
       constraint: this.constraint,
       doNothing: true,
     };
-    return { onConflictNode } as any; // This will be handled by the main builder
+    const newNode = InsertQueryNode.cloneWithOnConflict(
+      this.builder.node,
+      onConflictNode
+    );
+    return new InsertQueryBuilderImpl<DB, TB, PrettifiedInsertResult>(
+      this.builder.tableName,
+      this.builder.postgres,
+      newNode
+    );
   }
 
   doUpdate(
     updates: Partial<InsertObject<DB, TB>>
-  ): InsertQueryBuilder<DB, TB, InsertResult> {
+  ): InsertQueryBuilder<DB, TB, PrettifiedInsertResult> {
     // Create constraint-based conflict with updates
     const updateNodes = Object.entries(updates).map(([column, value]) => ({
       kind: "ColumnUpdateNode" as const,
@@ -213,7 +251,15 @@ class OnConflictConstraintBuilderImpl<DB, TB extends keyof DB>
       constraint: this.constraint,
       updates: updateNodes,
     };
-    return { onConflictNode } as any; // This will be handled by the main builder
+    const newNode = InsertQueryNode.cloneWithOnConflict(
+      this.builder.node,
+      onConflictNode
+    );
+    return new InsertQueryBuilderImpl<DB, TB, PrettifiedInsertResult>(
+      this.builder.tableName,
+      this.builder.postgres,
+      newNode
+    );
   }
 }
 
@@ -223,9 +269,9 @@ class OnConflictConstraintBuilderImpl<DB, TB extends keyof DB>
 export class InsertQueryBuilderImpl<DB, TB extends keyof DB, O>
   implements InsertQueryBuilder<DB, TB, O>
 {
-  private node: InsertQueryNode;
-  private tableName: TB;
-  private postgres: PostgreSQL;
+  public node: InsertQueryNode;
+  public tableName: TB;
+  public postgres: PostgreSQL;
 
   constructor(
     tableName: TB,
@@ -239,7 +285,7 @@ export class InsertQueryBuilderImpl<DB, TB extends keyof DB, O>
 
   values(
     values: InsertObject<DB, TB> | readonly InsertObject<DB, TB>[]
-  ): InsertQueryBuilder<DB, TB, InsertResult> {
+  ): InsertQueryBuilder<DB, TB, PrettifiedInsertResult> {
     // Normalize to array for consistent handling
     const valuesArray = Array.isArray(values) ? values : [values];
 
@@ -251,7 +297,7 @@ export class InsertQueryBuilderImpl<DB, TB extends keyof DB, O>
     // Clone the current node with the new VALUES clause
     const newNode = InsertQueryNode.cloneWithValues(this.node, valuesNode);
 
-    return new InsertQueryBuilderImpl<DB, TB, InsertResult>(
+    return new InsertQueryBuilderImpl<DB, TB, PrettifiedInsertResult>(
       this.tableName,
       this.postgres,
       newNode
@@ -293,21 +339,9 @@ export class InsertQueryBuilderImpl<DB, TB extends keyof DB, O>
   onConflict(
     builder: (oc: OnConflictBuilder<DB, TB>) => OnConflictColumnBuilder<DB, TB>
   ): InsertQueryBuilder<DB, TB, O> {
-    const onConflictBuilder = new OnConflictBuilderImpl<DB, TB>();
+    const onConflictBuilder = new OnConflictBuilderImpl<DB, TB>(this);
     const result = builder(onConflictBuilder);
-
-    // Extract the onConflictNode from the result
-    const onConflictNode = (result as any).onConflictNode;
-    const newNode = InsertQueryNode.cloneWithOnConflict(
-      this.node,
-      onConflictNode
-    );
-
-    return new InsertQueryBuilderImpl<DB, TB, O>(
-      this.tableName,
-      this.postgres,
-      newNode
-    );
+    return result as any; // The result is already the proper builder instance
   }
 
   toOperationNode(): InsertQueryNode {

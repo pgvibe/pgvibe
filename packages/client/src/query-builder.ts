@@ -235,6 +235,7 @@ export type {
   InsertQueryBuilder,
   CreateInsertQueryBuilder,
   InsertResult,
+  PrettifiedInsertResult,
   InsertReturningResult,
   InsertReturningAllResult,
   InsertObject,
