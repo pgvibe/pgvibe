@@ -450,9 +450,10 @@ async function testTypeSafetyValidation() {
   // 2. Number to string: name: 123 instead of name: "string"
   // 3. Invalid column names: nonexistent_column: "value"
   // 4. Missing required fields: omitting 'name' from test_users
-  // 5. Auto-generated fields in INSERT: id: 1 for test_users (id is Generated<number>)
-  // 6. Wrong array types: tags: [1, 2, 3] instead of tags: ["a", "b", "c"]
-  // 7. Non-null to nullable: email: undefined for required string field
+  // 5. Wrong array types: tags: [1, 2, 3] instead of tags: ["a", "b", "c"]
+  // 6. Non-null to nullable: email: undefined for required string field
+  //
+  // Note: Generated/WithDefault fields CAN be provided (they're optional overrides)
 
   // The fact that this test function compiles and the above valid operations work
   // proves our type system correctly allows valid operations while preventing invalid ones.
@@ -496,20 +497,24 @@ function testTypeErrorPrevention() {
     })
   );
 
-  // Test 3: Auto-generated fields should not be insertable
-  expectError(
-    integrationDb.insertInto("test_users").values({
-      id: 1, // ❌ id is Generated<number>
-      name: "User",
-    })
-  );
+  // Test 3: Generated and WithDefault fields CAN be provided (optional override)
+  // These should NOT error - you can override generated/default values
+  const validWithGenerated = integrationDb.insertInto("test_users").values({
+    id: 1, // ✅ Generated<number> can be overridden
+    name: "User",
+  });
 
-  expectError(
-    integrationDb.insertInto("test_users").values({
+  const validWithGeneratedTimestamp = integrationDb
+    .insertInto("test_users")
+    .values({
       name: "User",
-      created_at: new Date(), // ❌ created_at is Generated<Date>
-    })
-  );
+      created_at: new Date(), // ✅ Generated<Date> can be overridden
+    });
+
+  const validWithDefault = integrationDb.insertInto("test_users").values({
+    name: "User",
+    active: false, // ✅ WithDefault<boolean> can be overridden
+  });
 
   // Test 4: Invalid column names
   expectError(
