@@ -111,14 +111,15 @@ export type RequiredInsertKeys<T> = {
  * For INSERT operations: make Generated and WithDefault columns optional,
  * keep nullable columns as optional with null, require everything else
  *
- * This is a simplified approach that should work correctly
+ * Fixed: Use 'null extends T[K]' instead of 'T[K] extends Nullable<any>'
+ * to correctly identify nullable fields without matching all types to 'any'
  */
 export type InsertType<T> = {
   [K in keyof T as IsGenerated<T[K]> extends true
     ? never
     : HasDefault<T[K]> extends true
     ? never
-    : T[K] extends Nullable<any>
+    : null extends T[K]
     ? never
     : K]: ExtractBaseType<T[K]>;
 } & {
@@ -126,7 +127,7 @@ export type InsertType<T> = {
     ? K
     : HasDefault<T[K]> extends true
     ? K
-    : T[K] extends Nullable<any>
+    : null extends T[K]
     ? K
     : never]?: ExtractBaseType<T[K]>;
 };
