@@ -23,6 +23,20 @@ import {
   type CreateInsertQueryBuilder,
 } from "./core/builders/insert-query-builder";
 
+// Export utility types for operation-aware type system
+export type {
+  Generated,
+  WithDefault,
+  Nullable,
+  InsertType,
+  UpdateType,
+  SelectType,
+  ExtractBaseType,
+  IsGenerated,
+  HasDefault,
+  IsNullable,
+} from "./core/types/utility-types";
+
 /**
  * Raw SQL query result interface
  */

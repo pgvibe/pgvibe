@@ -4,6 +4,7 @@
 import { InsertQueryNode } from "../ast/insert-query-node";
 import type { PostgreSQL } from "../postgres/postgres-dialect";
 import type { ColumnReference } from "./select-query-builder";
+import type { InsertType, ExtractBaseType } from "../types/utility-types";
 
 /**
  * Result type for INSERT operations without RETURNING clause
@@ -25,42 +26,30 @@ export type InsertReturningResult<
     : P]: P extends `${infer Table}.${infer Column}`
     ? Table extends TB
       ? Column extends keyof DB[Table]
-        ? DB[Table][Column]
+        ? ExtractBaseType<DB[Table][Column]>
         : never
       : never
     : P extends keyof DB[TB]
-    ? DB[TB][P]
+    ? ExtractBaseType<DB[TB][P]>
     : never;
 }[];
 
 /**
  * Result type for INSERT operations with RETURNING *
  */
-export type InsertReturningAllResult<DB, TB extends keyof DB> = DB[TB][];
+export type InsertReturningAllResult<DB, TB extends keyof DB> = {
+  [K in keyof DB[TB]]: ExtractBaseType<DB[TB][K]>;
+}[];
 
 /**
  * Insert value type for a specific table
- * Provides a practical approach for INSERT operations:
- * - Makes nullable columns optional
- * - Makes array columns optional (they typically have defaults)
- * - Requires all other columns
- *
- * For auto-generated columns (id, timestamps), users should make them
- * optional in their schema definitions using union types with undefined.
+ * Uses the new utility type system to provide operation-aware types:
+ * - Generated columns (marked with Generated<T>) are optional
+ * - Columns with defaults (marked with WithDefault<T>) are optional
+ * - Nullable columns (marked with Nullable<T>) are optional
+ * - All other columns are required
  */
-export type InsertObject<DB, TB extends keyof DB> = {
-  [K in keyof DB[TB] as DB[TB][K] extends null | undefined
-    ? never
-    : DB[TB][K] extends readonly any[]
-    ? never
-    : K]: DB[TB][K];
-} & {
-  [K in keyof DB[TB] as DB[TB][K] extends null | undefined
-    ? K
-    : DB[TB][K] extends readonly any[]
-    ? K
-    : never]?: DB[TB][K];
-};
+export type InsertObject<DB, TB extends keyof DB> = InsertType<DB[TB]>;
 
 /**
  * OnConflict builder interface for building conflict resolution clauses

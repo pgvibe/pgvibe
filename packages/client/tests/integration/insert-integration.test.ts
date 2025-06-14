@@ -71,7 +71,7 @@ describe("INSERT Integration Tests", () => {
 
     test("should insert a user with minimal required fields", async () => {
       const result = await db
-        .insertInto("test_users" as any)
+        .insertInto("test_users")
         .values({
           name: "Jane Doe",
         })
@@ -82,7 +82,7 @@ describe("INSERT Integration Tests", () => {
 
     test("should insert multiple users in bulk", async () => {
       const result = await db
-        .insertInto("test_users" as any)
+        .insertInto("test_users")
         .values([
           { name: "John Doe", email: "john@example.com", active: true },
           { name: "Jane Smith", email: "jane@example.com", active: false },
@@ -95,7 +95,7 @@ describe("INSERT Integration Tests", () => {
 
     test("should handle null values correctly", async () => {
       const result = await db
-        .insertInto("test_users" as any)
+        .insertInto("test_users")
         .values({
           name: "John Doe",
           email: null, // Nullable field
@@ -110,7 +110,7 @@ describe("INSERT Integration Tests", () => {
   describe("RETURNING Clause", () => {
     test("should return specific columns after insert", async () => {
       const result = await db
-        .insertInto("test_users" as any)
+        .insertInto("test_users")
         .values({
           name: "John Doe",
           email: "john@example.com",
@@ -129,7 +129,7 @@ describe("INSERT Integration Tests", () => {
 
     test("should return all columns with returningAll()", async () => {
       const result = await db
-        .insertInto("test_users" as any)
+        .insertInto("test_users")
         .values({
           name: "Jane Smith",
           email: "jane@example.com",
@@ -149,7 +149,7 @@ describe("INSERT Integration Tests", () => {
 
     test("should return data from bulk insert", async () => {
       const result = await db
-        .insertInto("test_users" as any)
+        .insertInto("test_users")
         .values([
           { name: "John Doe", email: "john@example.com" },
           { name: "Jane Smith", email: "jane@example.com" },
@@ -170,7 +170,7 @@ describe("INSERT Integration Tests", () => {
     test("should handle ON CONFLICT DO NOTHING", async () => {
       // First insert
       await db
-        .insertInto("test_users" as any)
+        .insertInto("test_users")
         .values({
           name: "John Doe",
           email: "john@example.com",
@@ -180,20 +180,20 @@ describe("INSERT Integration Tests", () => {
 
       // Second insert with same email should be ignored
       const result = await db
-        .insertInto("test_users" as any)
+        .insertInto("test_users")
         .values({
           name: "John Updated",
           email: "john@example.com", // Duplicate email
           active: false,
         })
-        .onConflict((oc: any) => oc.column("email").doNothing())
+        .onConflict((oc) => oc.column("email").doNothing())
         .execute();
 
       expect(result.affectedRows).toBe(0);
 
       // Verify original data wasn't changed
       const users = await db
-        .selectFrom("test_users" as any)
+        .selectFrom("test_users")
         .select(["name", "active"])
         .where("email", "=", "john@example.com")
         .execute();
@@ -206,7 +206,7 @@ describe("INSERT Integration Tests", () => {
     test("should handle ON CONFLICT DO UPDATE", async () => {
       // First insert
       await db
-        .insertInto("test_users" as any)
+        .insertInto("test_users")
         .values({
           name: "John Doe",
           email: "john@example.com",
@@ -216,13 +216,13 @@ describe("INSERT Integration Tests", () => {
 
       // Second insert with update on conflict
       const result = await db
-        .insertInto("test_users" as any)
+        .insertInto("test_users")
         .values({
           name: "John Updated",
           email: "john@example.com", // Duplicate email
           active: false,
         })
-        .onConflict((oc: any) =>
+        .onConflict((oc) =>
           oc.column("email").doUpdate({
             name: "John Updated",
             active: false,
@@ -234,7 +234,7 @@ describe("INSERT Integration Tests", () => {
 
       // Verify data was updated
       const users = await db
-        .selectFrom("test_users" as any)
+        .selectFrom("test_users")
         .select(["name", "active"])
         .where("email", "=", "john@example.com")
         .execute();
@@ -247,7 +247,7 @@ describe("INSERT Integration Tests", () => {
     test("should handle ON CONFLICT with RETURNING", async () => {
       // First insert
       await db
-        .insertInto("test_users" as any)
+        .insertInto("test_users")
         .values({
           name: "John Doe",
           email: "john@example.com",
@@ -257,13 +257,13 @@ describe("INSERT Integration Tests", () => {
 
       // Conflict with update and returning
       const result = await db
-        .insertInto("test_users" as any)
+        .insertInto("test_users")
         .values({
           name: "John New",
           email: "john@example.com",
           active: false,
         })
-        .onConflict((oc: any) =>
+        .onConflict((oc) =>
           oc.column("email").doUpdate({
             name: "John Updated",
           })
@@ -281,7 +281,7 @@ describe("INSERT Integration Tests", () => {
     test("should handle multiple conflict columns", async () => {
       // Create a unique constraint on name + email combination (simulated with single column for this test)
       await db
-        .insertInto("test_users" as any)
+        .insertInto("test_users")
         .values({
           name: "John Doe",
           email: "john@example.com",
@@ -289,13 +289,13 @@ describe("INSERT Integration Tests", () => {
         .execute();
 
       const result = await db
-        .insertInto("test_users" as any)
+        .insertInto("test_users")
         .values({
           name: "John Doe",
           email: "john@example.com", // Same combination
           active: false,
         })
-        .onConflict((oc: any) => oc.columns(["email"]).doNothing())
+        .onConflict((oc) => oc.columns(["email"]).doNothing())
         .execute();
 
       expect(result.affectedRows).toBe(0);
@@ -306,7 +306,7 @@ describe("INSERT Integration Tests", () => {
     test("should work with foreign key relationships", async () => {
       // First create a user
       const userResult = await db
-        .insertInto("test_users" as any)
+        .insertInto("test_users")
         .values({
           name: "John Doe",
           email: "john@example.com",
@@ -319,7 +319,7 @@ describe("INSERT Integration Tests", () => {
 
       // Then create a post for that user
       const postResult = await db
-        .insertInto("test_posts" as any)
+        .insertInto("test_posts")
         .values({
           user_id: userId!,
           title: "My First Post",
@@ -341,24 +341,18 @@ describe("INSERT Integration Tests", () => {
         active: i % 2 === 0,
       }));
 
-      const result = await db
-        .insertInto("test_users" as any)
-        .values(users)
-        .execute();
+      const result = await db.insertInto("test_users").values(users).execute();
 
       expect(result.affectedRows).toBe(50);
 
       // Verify data was inserted
-      const count = await db
-        .selectFrom("test_users" as any)
-        .select(["id"])
-        .execute();
+      const count = await db.selectFrom("test_users").select(["id"]).execute();
       expect(count).toHaveLength(50);
     });
 
     test("should handle default values", async () => {
       const result = await db
-        .insertInto("test_users" as any)
+        .insertInto("test_users")
         .values({
           name: "John Doe",
           email: "john@example.com",
@@ -376,7 +370,7 @@ describe("INSERT Integration Tests", () => {
     test("should handle constraint violations", async () => {
       // First insert
       await db
-        .insertInto("test_users" as any)
+        .insertInto("test_users")
         .values({
           name: "John Doe",
           email: "john@example.com",
@@ -386,7 +380,7 @@ describe("INSERT Integration Tests", () => {
       // Second insert with same email should fail without ON CONFLICT
       await expect(
         db
-          .insertInto("test_users" as any)
+          .insertInto("test_users")
           .values({
             name: "Jane Doe",
             email: "john@example.com", // Duplicate email
@@ -399,10 +393,10 @@ describe("INSERT Integration Tests", () => {
       // This should fail because name is required but we're not providing it
       await expect(
         db
-          .insertInto("test_users" as any)
+          .insertInto("test_users")
           .values({
             email: "john@example.com",
-          } as any) // Type assertion to bypass compile-time check
+          }) // Type assertion to bypass compile-time check
           .execute()
       ).rejects.toThrow();
     });
@@ -410,7 +404,7 @@ describe("INSERT Integration Tests", () => {
     test("should handle invalid foreign key", async () => {
       await expect(
         db
-          .insertInto("test_posts" as any)
+          .insertInto("test_posts")
           .values({
             user_id: 99999, // Non-existent user
             title: "Test Post",

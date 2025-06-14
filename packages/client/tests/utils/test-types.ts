@@ -2,6 +2,11 @@
 // These types are used in tests and should match the database schema examples
 
 import type { JsonbType } from "../../src/core/builders/expression-builder";
+import type {
+  Generated,
+  WithDefault,
+  Nullable,
+} from "../../src/core/types/utility-types";
 
 /**
  * User table type for testing with all columns from examples
@@ -47,41 +52,34 @@ export interface CommentTable {
 /**
  * Test Users table for integration tests
  * Matches the schema created in insert-integration.test.ts
- *
- * For INSERT operations:
- * - id is auto-generated (SERIAL), so it's optional for inserts
- * - name is required (NOT NULL, no default)
- * - email is nullable, so it's optional for inserts
- * - active has a default (DEFAULT true), so it's optional for inserts
- * - created_at has a default (DEFAULT CURRENT_TIMESTAMP), so it's optional for inserts
+ * Uses utility types to encode database semantics:
+ * - Generated<T>: Auto-generated columns (SERIAL, etc.)
+ * - WithDefault<T>: Columns with database defaults
+ * - Nullable<T>: Columns that can be NULL
  */
 export interface TestUserTable {
-  id?: number; // SERIAL PRIMARY KEY (auto-generated, optional for INSERT)
+  id: Generated<number>; // SERIAL PRIMARY KEY (auto-generated)
   name: string; // VARCHAR(255) NOT NULL (required)
-  email?: string | null; // VARCHAR(255) UNIQUE (nullable, optional for INSERT)
-  active?: boolean; // BOOLEAN DEFAULT true (has default, optional for INSERT)
-  created_at?: Date; // TIMESTAMP DEFAULT CURRENT_TIMESTAMP (has default, optional for INSERT)
+  email: Nullable<string>; // VARCHAR(255) UNIQUE (nullable)
+  active: WithDefault<boolean>; // BOOLEAN DEFAULT true (has default)
+  created_at: Generated<Date>; // TIMESTAMP DEFAULT CURRENT_TIMESTAMP (auto-generated)
 }
 
 /**
  * Test Posts table for integration tests
  * Matches the schema created in insert-integration.test.ts
- *
- * For INSERT operations:
- * - id is auto-generated (SERIAL), so it's optional for inserts
- * - user_id is required (NOT NULL, no default)
- * - title is required (NOT NULL, no default)
- * - content is nullable, so it's optional for inserts
- * - published has a default (DEFAULT false), so it's optional for inserts
- * - created_at has a default (DEFAULT CURRENT_TIMESTAMP), so it's optional for inserts
+ * Uses utility types to encode database semantics:
+ * - Generated<T>: Auto-generated columns (SERIAL, etc.)
+ * - WithDefault<T>: Columns with database defaults
+ * - Nullable<T>: Columns that can be NULL
  */
 export interface TestPostTable {
-  id?: number; // SERIAL PRIMARY KEY (auto-generated, optional for INSERT)
+  id: Generated<number>; // SERIAL PRIMARY KEY (auto-generated)
   user_id: number; // INTEGER REFERENCES test_users(id) (required)
   title: string; // VARCHAR(255) NOT NULL (required)
-  content?: string | null; // TEXT (nullable, optional for INSERT)
-  published?: boolean; // BOOLEAN DEFAULT false (has default, optional for INSERT)
-  created_at?: Date; // TIMESTAMP DEFAULT CURRENT_TIMESTAMP (has default, optional for INSERT)
+  content: Nullable<string>; // TEXT (nullable)
+  published: WithDefault<boolean>; // BOOLEAN DEFAULT false (has default)
+  created_at: Generated<Date>; // TIMESTAMP DEFAULT CURRENT_TIMESTAMP (auto-generated)
 }
 
 /**
