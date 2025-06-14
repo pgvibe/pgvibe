@@ -53,7 +53,8 @@ describe("Date and Timestamp Data Types Integration Tests", () => {
         .execute();
 
       expect(insertResult).toHaveLength(1);
-      expect(insertResult[0]?.birth_date).toBe(testDate);
+      expect(insertResult[0]?.birth_date).toBeInstanceOf(Date);
+      expect(insertResult[0]?.birth_date).toEqual(new Date(testDate));
 
       // Verify with SELECT
       const selectResult = await db
@@ -63,7 +64,8 @@ describe("Date and Timestamp Data Types Integration Tests", () => {
         .execute();
 
       expect(selectResult).toHaveLength(1);
-      expect(selectResult[0]?.birth_date).toBe(testDate);
+      expect(selectResult[0]?.birth_date).toBeInstanceOf(Date);
+      expect(selectResult[0]?.birth_date).toEqual(new Date(testDate));
     });
 
     test("should handle null DATE values", async () => {
@@ -76,7 +78,7 @@ describe("Date and Timestamp Data Types Integration Tests", () => {
         .returning(["id", "name", "birth_date"])
         .execute();
 
-      expect(insertResult[0].birth_date).toBeNull();
+      expect(insertResult[0]!.birth_date).toBeNull();
     });
 
     test("should handle date comparisons in WHERE clauses", async () => {
@@ -100,8 +102,8 @@ describe("Date and Timestamp Data Types Integration Tests", () => {
         .execute();
 
       expect(result).toHaveLength(2);
-      expect(result[0].name).toBe("User 2000");
-      expect(result[1].name).toBe("User 2010");
+      expect(result[0]!.name).toBe("User 2000");
+      expect(result[1]!.name).toBe("User 2010");
     });
   });
 
@@ -119,8 +121,10 @@ describe("Date and Timestamp Data Types Integration Tests", () => {
         .execute();
 
       expect(insertResult).toHaveLength(1);
-      expect(insertResult[0].created_at).toContain("2024-01-15");
-      expect(insertResult[0].created_at).toContain("14:30:00");
+      expect(insertResult[0]!.created_at).toBeInstanceOf(Date);
+      const createdAtDate = insertResult[0]!.created_at as Date;
+      expect(createdAtDate.toISOString()).toContain("2024-01-15");
+      expect(createdAtDate.toISOString()).toContain("14:30:00");
     });
 
     test("should insert and select TIMESTAMPTZ values", async () => {
@@ -136,7 +140,7 @@ describe("Date and Timestamp Data Types Integration Tests", () => {
         .execute();
 
       expect(insertResult).toHaveLength(1);
-      expect(insertResult[0].updated_at).toBeDefined();
+      expect(insertResult[0]!.updated_at).toBeDefined();
     });
 
     test("should handle default NOW() timestamps", async () => {
@@ -153,11 +157,11 @@ describe("Date and Timestamp Data Types Integration Tests", () => {
       const afterInsert = new Date();
 
       expect(insertResult).toHaveLength(1);
-      expect(insertResult[0].created_timestamp).toBeDefined();
-      expect(insertResult[0].updated_timestamptz).toBeDefined();
+      expect(insertResult[0]!.created_timestamp).toBeDefined();
+      expect(insertResult[0]!.updated_timestamptz).toBeDefined();
 
       // Verify timestamps are reasonable
-      const createdTimestamp = new Date(insertResult[0].created_timestamp);
+      const createdTimestamp = new Date(insertResult[0]!.created_timestamp);
       expect(createdTimestamp.getTime()).toBeGreaterThanOrEqual(
         beforeInsert.getTime() - 1000
       );
@@ -181,7 +185,7 @@ describe("Date and Timestamp Data Types Integration Tests", () => {
         .execute();
 
       expect(insertResult).toHaveLength(1);
-      expect(insertResult[0].scheduled_time).toBe(testTime);
+      expect(insertResult[0]!.scheduled_time).toBe(testTime);
     });
 
     test("should handle TIME with milliseconds", async () => {
@@ -197,7 +201,7 @@ describe("Date and Timestamp Data Types Integration Tests", () => {
         .execute();
 
       expect(insertResult).toHaveLength(1);
-      expect(insertResult[0].scheduled_time).toContain("14:30:15");
+      expect(insertResult[0]!.scheduled_time).toContain("14:30:15");
     });
   });
 
@@ -215,7 +219,7 @@ describe("Date and Timestamp Data Types Integration Tests", () => {
         .execute();
 
       expect(insertResult).toHaveLength(1);
-      expect(insertResult[0].interval_duration).toBeDefined();
+      expect(insertResult[0]!.interval_duration).toBeDefined();
     });
 
     test("should handle various INTERVAL formats", async () => {
@@ -238,7 +242,7 @@ describe("Date and Timestamp Data Types Integration Tests", () => {
       expect(insertResult).toHaveLength(4);
       insertResult.forEach((row) => {
         expect(row.interval_duration).toBeDefined();
-        expect(typeof row.interval_duration).toBe("string");
+        expect(typeof row.interval_duration).toBe("object");
       });
     });
   });
@@ -258,9 +262,9 @@ describe("Date and Timestamp Data Types Integration Tests", () => {
         .execute();
 
       expect(insertResult).toHaveLength(3);
-      expect(insertResult[0].birth_date).toBe("2020-02-29");
-      expect(insertResult[1].birth_date).toBe("2000-01-01");
-      expect(insertResult[2].birth_date).toBe("2023-12-31");
+      expect(insertResult[0]!.birth_date).toEqual(new Date("2020-02-29"));
+      expect(insertResult[1]!.birth_date).toEqual(new Date("2000-01-01"));
+      expect(insertResult[2]!.birth_date).toEqual(new Date("2023-12-31"));
     });
 
     test("should handle timezone-aware timestamps", async () => {
@@ -322,9 +326,9 @@ describe("Date and Timestamp Data Types Integration Tests", () => {
         .orderBy("created_at", "desc")
         .execute();
 
-      expect(result[0].name).toBe("Third");
-      expect(result[1].name).toBe("Second");
-      expect(result[2].name).toBe("First");
+      expect(result[0]!.name).toBe("Third");
+      expect(result[1]!.name).toBe("Second");
+      expect(result[2]!.name).toBe("First");
     });
   });
 
@@ -340,9 +344,9 @@ describe("Date and Timestamp Data Types Integration Tests", () => {
         .returning(["name", "birth_date", "created_at", "created_timestamp"])
         .execute();
 
-      const user = insertResult[0];
-      expect(typeof user.birth_date).toBe("string"); // Dates come back as strings
-      expect(typeof user.created_at).toBe("string"); // Timestamps come back as strings
+      const user = insertResult[0]!;
+      expect(user.birth_date).toBeInstanceOf(Date); // Dates come back as Date objects
+      expect(user.created_at).toBeInstanceOf(Date); // Timestamps come back as Date objects
       expect(user.created_timestamp).toBeDefined(); // Default timestamp should exist
     });
 
@@ -357,8 +361,8 @@ describe("Date and Timestamp Data Types Integration Tests", () => {
         .returning(["name", "birth_date", "created_at"])
         .execute();
 
-      expect(result[0].birth_date).toBeNull();
-      expect(result[0].created_at).toBeNull();
+      expect(result[0]!.birth_date).toBeNull();
+      expect(result[0]!.created_at).toBeNull();
     });
   });
 });
