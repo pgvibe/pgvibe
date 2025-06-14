@@ -2,8 +2,9 @@
 // Tests that column selection produces properly typed results
 
 import { describe, test, expect, beforeAll } from "bun:test";
-import { ZenQ, type Database } from "../../src/query-builder";
+import { ZenQ } from "../../src/query-builder";
 import { createTestDatabase } from "../utils/test-config";
+import type { Database } from "../utils/test-types";
 
 describe("Type Safety Integration Tests", () => {
   let db: ZenQ<Database>;
@@ -19,7 +20,7 @@ describe("Type Safety Integration Tests", () => {
 
       expect(users.length).toBeGreaterThan(0);
 
-      const user = users[0];
+      const user = users[0]!; // Non-null assertion since we verified length > 0
 
       // All UserTable properties should be present
       expect(user).toHaveProperty("id");
@@ -42,7 +43,7 @@ describe("Type Safety Integration Tests", () => {
       const posts = await db.selectFrom("posts").execute();
 
       if (posts.length > 0) {
-        const post = posts[0];
+        const post = posts[0]!; // Non-null assertion since we verified length > 0
 
         // All PostTable properties should be present
         expect(post).toHaveProperty("id");
@@ -127,7 +128,7 @@ describe("Type Safety Integration Tests", () => {
       const users = await db.selectFrom("users").execute();
 
       if (users.length > 0) {
-        const user = users[0];
+        const user = users[0]!; // Non-null assertion since we verified length > 0
 
         // Check that it's a proper UserTable type
         const isUserType =
@@ -144,7 +145,7 @@ describe("Type Safety Integration Tests", () => {
       const posts = await db.selectFrom("posts").execute();
 
       if (posts.length > 0) {
-        const post = posts[0];
+        const post = posts[0]!; // Non-null assertion since we verified length > 0
 
         // Check that it's a proper PostTable type
         const isPostType =
@@ -162,7 +163,7 @@ describe("Type Safety Integration Tests", () => {
       const comments = await db.selectFrom("comments").execute();
 
       if (comments.length > 0) {
-        const comment = comments[0];
+        const comment = comments[0]!; // Non-null assertion since we verified length > 0
 
         // Check that it's a proper CommentTable type
         const isCommentType =

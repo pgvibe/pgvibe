@@ -11,6 +11,8 @@ Structure the plan to encourage exploration and learning:
 - Allow flexibility in HOW goals are achieved
 - Build in checkpoints to validate approach before proceeding
 
+Focus on writing tests first if possible, and ask the user if the tests are correct. Run tests often, and ensure you are moving towards tests passing.
+
 Organize phases so we can implement one at a time, with each phase building on learnings from previous phases. Focus on goals and outcomes rather than specific tasks.
 
 Example:
