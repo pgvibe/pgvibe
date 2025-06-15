@@ -77,12 +77,9 @@ export class ZenQ<DB> {
    */
   selectFrom<TE extends TableExpression<DB>>(
     table: TE
-  ): CreateSelectQueryBuilder<DB, ExtractTableAlias<DB, TE>> {
+  ): CreateSelectQueryBuilder<DB, ExtractTableAlias<DB, TE>, TE> {
     // Create the query builder with intelligent error messages
-    return createSelectQueryBuilder<DB, ExtractTableAlias<DB, TE>>(
-      this.postgres,
-      table as ExtractTableAlias<DB, TE> & string
-    );
+    return createSelectQueryBuilder<DB, TE>(this.postgres, table);
   }
 
   /**

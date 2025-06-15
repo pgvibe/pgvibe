@@ -6,6 +6,7 @@ export * from "./core/select.test-d";
 export * from "./core/where.test-d";
 export * from "./core/insert.test-d";
 export * from "./core/joins.test-d";
+export * from "./core/table-aliases.test-d";
 
 // Expression system
 export * from "./expression/expression-builder.test-d";
