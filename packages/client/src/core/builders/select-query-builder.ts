@@ -243,7 +243,9 @@ export type TypeSafeWhereValue<
  * Helper type to get all columns from joined tables
  * Uses distributive conditional types to get columns from all tables in TB
  */
-export type AllColumnsFromTables<DB, TB extends keyof DB> = keyof DB[TB];
+export type AllColumnsFromTables<DB, TB extends keyof DB> = TB extends keyof DB
+  ? keyof DB[TB]
+  : never;
 
 /**
  * Convert AllColumnsFromTables union to a readonly array type
@@ -266,13 +268,10 @@ export type JoinedTables<DB, TB extends keyof DB, JT extends keyof DB> =
 /**
  * Better qualified column reference with clearer constraints
  * Only allows valid table.column combinations from currently joined tables
+ * Uses distributive conditional types to work with AllColumnsFromTables
  */
-export type QualifiedColumnReference<
-  DB,
-  TB extends keyof DB
-> = TB extends keyof DB
-  ? `${TB & string}.${Extract<keyof DB[TB], string>}`
-  : never;
+export type QualifiedColumnReference<DB, TB extends keyof DB> = `${TB &
+  string}.${Extract<AllColumnsFromTables<DB, TB>, string>}`;
 
 /**
  * Helper to validate that a qualified column reference is valid

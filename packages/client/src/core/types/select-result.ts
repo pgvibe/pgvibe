@@ -127,9 +127,13 @@ export type ResolveColumnTypeWithAlias<
       ? TDatabase[Prefix][ColumnName]
       : never
     : never
-  : // Simple column name
-  TColumn extends keyof TDatabase[TTables]
-  ? TDatabase[TTables][TColumn]
+  : // Simple column name - find which table it belongs to using distributive conditional
+  FindColumnTable<TDatabase, TTables, TColumn> extends infer FoundTable
+  ? FoundTable extends keyof TDatabase
+    ? TColumn extends keyof TDatabase[FoundTable]
+      ? TDatabase[FoundTable][TColumn]
+      : never
+    : never
   : never;
 
 /**
