@@ -126,7 +126,7 @@ async function testAliasInWhere() {
   const usersByEmail = await db
     .selectFrom("users as u")
     .select(["u.id", "u.name"])
-    .where("email", "like", "%@example.com")
+    .where("u.email", "like", "%@example.com")
     .execute();
   expectType<Array<{ id: number; name: string }>>(usersByEmail);
 
