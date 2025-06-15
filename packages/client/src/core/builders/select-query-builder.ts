@@ -118,6 +118,40 @@ export type ExtractColumnType<
   : never;
 
 /**
+ * Enhanced ExtractColumnType that handles alias-prefixed columns
+ * Uses the same logic as ResolveColumnTypeWithAlias but for WHERE clauses
+ */
+export type ExtractColumnTypeWithAlias<
+  DB,
+  TB extends keyof DB,
+  Column extends string,
+  TAliasContext extends string = never
+> = Column extends `${infer Prefix}.${infer ColumnName}`
+  ? // Qualified column - check if prefix is an alias
+    [TAliasContext] extends [never]
+    ? // No alias context - treat as regular qualified column
+      Prefix extends TB & keyof DB
+      ? ColumnName extends keyof DB[Prefix]
+        ? DB[Prefix][ColumnName]
+        : never
+      : never
+    : // Has alias context - map alias to actual table
+    Prefix extends TAliasContext
+    ? ColumnName extends keyof DB[TB]
+      ? DB[TB][ColumnName]
+      : never
+    : // Not using the alias, treat as regular qualified column
+    Prefix extends TB & keyof DB
+    ? ColumnName extends keyof DB[Prefix]
+      ? DB[Prefix][ColumnName]
+      : never
+    : never
+  : // Simple column name - find which table it belongs to
+  Column extends keyof DB[TB]
+  ? DB[TB][Column]
+  : never;
+
+/**
  * Enhanced WHERE value validation with essential type safety
  * Balances type safety with usability, similar to Kysely's approach
  */
@@ -190,14 +224,20 @@ export type SimpleWhereValue<
 /**
  * Enhanced WHERE value type with progressive type safety
  * Provides essential validations while maintaining usability
+ * Now properly handles alias-prefixed columns
  */
 export type TypeSafeWhereValue<
   DB,
   TB extends keyof DB,
   Column extends ColumnReference<DB, TB, any>,
   Operator extends WhereOperator,
+  Value,
+  TAliasContext extends string = never
+> = SimpleWhereValue<
+  ExtractColumnTypeWithAlias<DB, TB, Column, TAliasContext>,
+  Operator,
   Value
-> = SimpleWhereValue<ExtractColumnType<DB, TB, Column>, Operator, Value>;
+>;
 
 /**
  * Helper type to get all columns from joined tables
@@ -627,7 +667,7 @@ export interface SelectQueryBuilder<
   >(
     columnOrExpression: K | RawBuilder,
     operator?: Op,
-    value?: TypeSafeWhereValue<DB, TB, K, Op, V>
+    value?: TypeSafeWhereValue<DB, TB, K, Op, V, TAliasContext>
   ): SelectQueryBuilder<DB, TB, O, TJoinContext, TAliasContext>;
 
   /**
@@ -876,7 +916,7 @@ export class SelectQueryBuilderImpl<
           helpers: ExpressionHelpers<DB, TB>
         ) => Expression<SqlBool> | Expression<SqlBool>[]),
     operator?: Op,
-    value?: TypeSafeWhereValue<DB, TB, K, Op, V>
+    value?: TypeSafeWhereValue<DB, TB, K, Op, V, TAliasContext>
   ): SelectQueryBuilder<DB, TB, O, TJoinContext, TAliasContext> {
     let whereExpression: ExpressionNode;
 
