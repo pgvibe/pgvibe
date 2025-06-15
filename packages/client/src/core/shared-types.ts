@@ -18,9 +18,9 @@ export type TableExpression<DB> =
   | TableWithAlias<DB>; // Alias syntax: "users as u"
 
 /**
- * Table with alias syntax type - accepts any string (runtime parsing handles validation)
+ * Table with alias syntax type - constrains table name to valid tables from DB
  */
-export type TableWithAlias<DB> = string;
+export type TableWithAlias<DB> = `${keyof DB & string} as ${string}`;
 
 /**
  * Extract table alias from table expressions
