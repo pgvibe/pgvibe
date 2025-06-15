@@ -160,9 +160,9 @@ export type DetectDuplicateProperties<TColumns extends readonly string[]> =
     : never;
 
 /**
- * Resolve the actual database column type for a given column reference
+ * FIXED: Resolve the actual database column type for a given column reference
  * Handles both simple and qualified column names
- * Fixed to handle single table case correctly
+ * Now properly handles single table keys (the main bug fix)
  */
 export type ResolveColumnType<
   TDatabase,
@@ -175,7 +175,7 @@ export type ResolveColumnType<
       ? TDatabase[ExtractTableName<TColumn>][ExtractColumnName<TColumn>]
       : never
     : never
-  : // Simple column name - handle single vs multiple tables
+  : // Simple column name - FIXED logic for single vs multiple tables
   TTables extends keyof TDatabase
   ? TColumn extends keyof TDatabase[TTables]
     ? TDatabase[TTables][TColumn]

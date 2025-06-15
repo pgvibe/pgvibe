@@ -111,12 +111,11 @@ export type ExtractColumnType<
       : never
     : never
   : // Simple column name - find which table it belongs to
-  Column extends keyof DB[TB]
-  ? DB[TB][Column]
-  : // Check if column exists in any joined table
-    {
-      [T in TB]: Column extends keyof DB[T] ? DB[T][Column] : never;
-    }[TB];
+  TB extends keyof DB
+  ? Column extends keyof DB[TB]
+    ? DB[TB][Column]
+    : never
+  : never;
 
 /**
  * Enhanced WHERE value validation with essential type safety
@@ -204,9 +203,7 @@ export type TypeSafeWhereValue<
  * Helper type to get all columns from joined tables
  * Uses distributive conditional types to get columns from all tables in TB
  */
-export type AllColumnsFromTables<DB, TB extends keyof DB> = TB extends keyof DB
-  ? keyof DB[TB]
-  : never;
+export type AllColumnsFromTables<DB, TB extends keyof DB> = keyof DB[TB];
 
 /**
  * Convert AllColumnsFromTables union to a readonly array type
@@ -267,9 +264,13 @@ export type ColumnReference<
   DB,
   TB extends keyof DB,
   TAliasContext extends string = never
-> =
-  | Extract<AllColumnsFromTables<DB, TB>, string> // Simple: id, name, etc.
-  | Extract<QualifiedColumnReference<DB, TB>, string>; // Qualified: users.id, posts.title, etc.
+> = [TAliasContext] extends [never]
+  ? // No alias - show simple and qualified column names
+    | Extract<AllColumnsFromTables<DB, TB>, string> // Simple: id, name, etc.
+      | Extract<QualifiedColumnReference<DB, TB>, string> // Qualified: users.id, posts.title, etc.
+  : // Has alias - show alias-prefixed + simple columns
+    | Extract<AllColumnsFromTables<DB, TB>, string> // Simple: id, name, etc.
+      | `${TAliasContext}.${Extract<AllColumnsFromTables<DB, TB>, string>}`; // Specific alias: u.id, etc.
 
 /**
  * Alias-prefixed column references for proper autocomplete support
@@ -1261,7 +1262,9 @@ export type CreateSelectQueryBuilder<
   DB,
   TB extends keyof DB,
   TE extends TableExpression<DB> = TB & string
-> = SelectQueryBuilder<DB, TB, Prettify<DB[TB]>>;
+> = TE extends `${string} as ${infer Alias}`
+  ? SelectQueryBuilder<DB, TB, Prettify<DB[TB]>, readonly [], Alias>
+  : SelectQueryBuilder<DB, TB, Prettify<DB[TB]>>;
 
 /**
  * Factory function for creating SelectQueryBuilder instances

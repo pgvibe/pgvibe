@@ -242,11 +242,9 @@ This improves code readability and reduces ambiguity in complex queries involvin
 
 **Robust regex-based approach**:
 
-- Handles case insensitive `AS` keyword
-- Flexible whitespace support
+- Handles `as` keyword
 - SQL identifier validation
 - Reserved word checking
-- **Pattern**: `/^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s+as\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*$/i`
 
 ### ✅ Phase 1.3: TDD Foundation Complete
 

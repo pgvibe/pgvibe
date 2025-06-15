@@ -3,8 +3,8 @@
 [test]
 # Run tests from any directory
 root = "./"
-# Use TypeScript for test files
-preload = []
+# Use TypeScript for test files  
+# preload = []
 
 [install]
 # Use workspaces

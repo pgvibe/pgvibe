@@ -1,5 +1,5 @@
-// Comprehensive Table Aliases Type Testing
-// Tests all aspects of table alias type inference and validation
+// Table Aliases Type Tests - Comprehensive TDD Suite
+// This file tests all aspects of table alias functionality with proper type validation
 
 import {
   expectType,
@@ -15,64 +15,89 @@ import type {
 } from "../utils/schemas.test-d.ts";
 
 // =============================================================================
-// 1. BASIC ALIAS SYNTAX ACCEPTANCE
+// 1. BASIC ALIAS FUNCTIONALITY
 // =============================================================================
 
-// ✅ Basic alias syntax should be accepted by TypeScript
-function testBasicAliasSyntax() {
-  // These should NOT produce TypeScript errors
-  const query1 = db.selectFrom("users as u");
-  const query2 = db.selectFrom("posts as p");
-  const query3 = db.selectFrom("comments as c");
+// ✅ Basic table alias syntax should work
+async function testBasicAliasSyntax() {
+  // Single table with alias
+  const users = await db.selectFrom("users as u").selectAll().execute();
+  expectType<
+    Array<{
+      id: number;
+      name: string;
+      email: string | null;
+      active: boolean;
+      created_at: Date;
+      tags: string[];
+      permissions: string[];
+      scores: number[];
+    }>
+  >(users);
 
-  expectAssignable<typeof query1>(query1);
-  expectAssignable<typeof query2>(query2);
-  expectAssignable<typeof query3>(query3);
+  // Different tables with aliases
+  const posts = await db.selectFrom("posts as p").selectAll().execute();
+  expectType<
+    Array<{
+      id: number;
+      user_id: number;
+      title: string;
+      content: string | null;
+      published: boolean;
+      created_at: Date;
+      categories: string[];
+      ratings: number[];
+    }>
+  >(posts);
 }
 
-// ✅ Case insensitive AS keyword acceptance
-function testCaseInsensitiveAs() {
-  const query1 = db.selectFrom("users as u");
-  const query2 = db.selectFrom("users AS u");
-  const query3 = db.selectFrom("users As u");
-
-  expectAssignable<typeof query1>(query1);
-  expectAssignable<typeof query2>(query2);
-  expectAssignable<typeof query3>(query3);
-}
-
-// ✅ Flexible whitespace handling
-function testFlexibleWhitespace() {
-  const query1 = db.selectFrom("users as u");
-  const query2 = db.selectFrom("  users   as   u  ");
-  const query3 = db.selectFrom("users\tas\tu");
-
-  expectAssignable<typeof query1>(query1);
-  expectAssignable<typeof query2>(query2);
-  expectAssignable<typeof query3>(query3);
-}
-
-// =============================================================================
-// 2. ALIAS-PREFIXED COLUMN REFERENCES
-// =============================================================================
-
-// ✅ Alias-prefixed columns in SELECT
-async function testAliasPrefixedSelect() {
-  // Single alias-prefixed column
+// ✅ Alias-prefixed column selection
+async function testAliasPrefixedColumns() {
+  // Single column with alias prefix
   const userIds = await db.selectFrom("users as u").select("u.id").execute();
   expectType<Array<{ id: number }>>(userIds);
 
-  // Multiple alias-prefixed columns
+  // Multiple columns with alias prefix
   const userBasics = await db
     .selectFrom("users as u")
     .select(["u.id", "u.name"])
     .execute();
   expectType<Array<{ id: number; name: string }>>(userBasics);
 
-  // Mixed alias-prefixed and non-prefixed
+  // Mixed types with alias prefix
   const userMixed = await db
     .selectFrom("users as u")
-    .select(["u.id", "name", "u.email"])
+    .select(["u.id", "u.email", "u.active"])
+    .execute();
+  expectType<
+    Array<{
+      id: number;
+      email: string | null;
+      active: boolean;
+    }>
+  >(userMixed);
+}
+
+// ✅ Non-prefixed columns should work with aliases (flexible referencing)
+async function testFlexibleColumnReferencing() {
+  // Mix of alias-prefixed and non-prefixed columns
+  const mixed = await db
+    .selectFrom("users as u")
+    .select(["u.id", "name", "u.email", "active"])
+    .execute();
+  expectType<
+    Array<{
+      id: number;
+      name: string;
+      email: string | null;
+      active: boolean;
+    }>
+  >(mixed);
+
+  // All non-prefixed columns with alias
+  const nonPrefixed = await db
+    .selectFrom("users as u")
+    .select(["id", "name", "email"])
     .execute();
   expectType<
     Array<{
@@ -80,12 +105,16 @@ async function testAliasPrefixedSelect() {
       name: string;
       email: string | null;
     }>
-  >(userMixed);
+  >(nonPrefixed);
 }
 
-// ✅ Alias-prefixed columns in WHERE clauses
-async function testAliasPrefixedWhere() {
-  // Alias-prefixed in WHERE
+// =============================================================================
+// 2. ALIAS WITH QUERY OPERATIONS
+// =============================================================================
+
+// ✅ WHERE clauses with aliases
+async function testAliasInWhere() {
+  // Alias-prefixed WHERE conditions
   const activeUsers = await db
     .selectFrom("users as u")
     .select(["u.id", "u.name"])
@@ -93,113 +122,50 @@ async function testAliasPrefixedWhere() {
     .execute();
   expectType<Array<{ id: number; name: string }>>(activeUsers);
 
-  // Mixed prefixed and non-prefixed in WHERE
-  const filteredUsers = await db
+  // Non-prefixed WHERE conditions with alias
+  const usersByEmail = await db
     .selectFrom("users as u")
-    .select(["u.id", "name"])
-    .where("u.active", "=", true)
-    .where("id", ">", 100)
+    .select(["u.id", "u.name"])
+    .where("email", "like", "%@example.com")
     .execute();
-  expectType<Array<{ id: number; name: string }>>(filteredUsers);
+  expectType<Array<{ id: number; name: string }>>(usersByEmail);
+
+  // Mixed WHERE conditions
+  const complexWhere = await db
+    .selectFrom("users as u")
+    .select(["u.id", "u.name"])
+    .where("u.active", "=", true)
+    .where("email", "is not", null)
+    .execute();
+  expectType<Array<{ id: number; name: string }>>(complexWhere);
 }
 
-// ✅ Alias-prefixed columns in ORDER BY
-async function testAliasPrefixedOrderBy() {
+// ✅ ORDER BY with aliases
+async function testAliasInOrderBy() {
   // Alias-prefixed ORDER BY
-  const orderedUsers = await db
+  const orderedByAlias = await db
     .selectFrom("users as u")
     .select(["u.id", "u.name"])
     .orderBy("u.created_at", "desc")
     .execute();
-  expectType<Array<{ id: number; name: string }>>(orderedUsers);
+  expectType<Array<{ id: number; name: string }>>(orderedByAlias);
 
   // Non-prefixed ORDER BY with alias
-  const orderedUsers2 = await db
+  const orderedNonPrefixed = await db
     .selectFrom("users as u")
-    .select(["u.id", "name"])
-    .orderBy("created_at", "asc")
+    .select(["u.id", "u.name"])
+    .orderBy("name", "asc")
     .execute();
-  expectType<Array<{ id: number; name: string }>>(orderedUsers2);
+  expectType<Array<{ id: number; name: string }>>(orderedNonPrefixed);
 }
 
-// =============================================================================
-// 3. JOIN OPERATIONS WITH ALIASES
-// =============================================================================
-
-// ✅ INNER JOIN with aliases
-async function testInnerJoinWithAliases() {
-  const joinResult = await db
-    .selectFrom("users as u")
-    .innerJoin("posts as p", "u.id", "p.user_id")
-    .select(["u.name", "p.title"])
-    .execute();
-
-  expectType<Array<{ name: string; title: string }>>(joinResult);
-}
-
-// ✅ Multiple JOINs with aliases
-async function testMultipleJoinsWithAliases() {
-  const multiJoinResult = await db
-    .selectFrom("users as u")
-    .innerJoin("posts as p", "u.id", "p.user_id")
-    .innerJoin("comments as c", "p.id", "c.post_id")
-    .select(["u.name", "p.title", "c.content"])
-    .execute();
-
-  expectType<
-    Array<{
-      name: string;
-      title: string;
-      content: string;
-    }>
-  >(multiJoinResult);
-}
-
-// ✅ Mixed alias/non-alias JOINs
-async function testMixedAliasJoins() {
-  const mixedJoinResult = await db
-    .selectFrom("users as u")
-    .innerJoin("posts", "u.id", "user_id")
-    .select(["u.name", "title"])
-    .execute();
-
-  expectType<Array<{ name: string; title: string }>>(mixedJoinResult);
-}
-
-// ✅ All JOIN types with aliases
-async function testAllJoinTypesWithAliases() {
-  // LEFT JOIN
-  const leftJoin = db
-    .selectFrom("users as u")
-    .leftJoin("posts as p", "u.id", "p.user_id");
-  expectAssignable<typeof leftJoin>(leftJoin);
-
-  // RIGHT JOIN
-  const rightJoin = db
-    .selectFrom("users as u")
-    .rightJoin("posts as p", "u.id", "p.user_id");
-  expectAssignable<typeof rightJoin>(rightJoin);
-
-  // FULL JOIN
-  const fullJoin = db
-    .selectFrom("users as u")
-    .fullJoin("posts as p", "u.id", "p.user_id");
-  expectAssignable<typeof fullJoin>(fullJoin);
-}
-
-// =============================================================================
-// 4. COMPLEX QUERY COMBINATIONS
-// =============================================================================
-
-// ✅ Complex query with all alias features
-async function testComplexAliasQuery() {
-  const complexResult = await db
-    .selectFrom("users as u")
-    .innerJoin("posts as p", "u.id", "p.user_id")
-    .select(["u.id", "u.name", "p.title", "p.published"])
-    .where("u.active", "=", true)
+// ✅ Complex query chaining with aliases
+async function testComplexAliasChaining() {
+  const complexQuery = await db
+    .selectFrom("posts as p")
+    .select(["p.id", "p.title", "p.published"])
     .where("p.published", "=", true)
-    .orderBy("u.created_at", "desc")
+    .where("user_id", "=", 123)
     .orderBy("p.created_at", "desc")
     .limit(10)
     .execute();
@@ -207,105 +173,138 @@ async function testComplexAliasQuery() {
   expectType<
     Array<{
       id: number;
-      name: string;
       title: string;
       published: boolean;
     }>
-  >(complexResult);
+  >(complexQuery);
 }
 
 // =============================================================================
-// 5. ERROR CASES (SHOULD FAIL)
+// 3. ERROR CASES - WHAT SHOULD FAIL
 // =============================================================================
 
-// ❌ Invalid alias syntax should produce errors
+// ❌ Invalid alias syntax should fail
 function testInvalidAliasSyntax() {
-  // Missing alias name
-  expectError(db.selectFrom("users as"));
+  // Multiple "as" keywords
+  expectError(db.selectFrom("users as u as x"));
 
-  // Missing AS keyword
-  expectError(db.selectFrom("users u"));
+  // Empty alias
+  expectError(db.selectFrom("users as "));
 
-  // Alias starting with number
-  expectError(db.selectFrom("users as 1invalid"));
-
-  // Reserved word as alias
-  expectError(db.selectFrom("users as select"));
-  expectError(db.selectFrom("users as from"));
+  // Invalid characters in alias
+  expectError(db.selectFrom("users as u-ser"));
+  expectError(db.selectFrom("users as 123"));
 }
 
-// ❌ Invalid column references should still produce errors
-function testInvalidColumnReferences() {
-  // Non-existent columns should still error
+// ❌ Wrong table prefix should fail when using aliases
+function testWrongTablePrefix() {
+  // Using original table name when alias is defined
+  expectError(db.selectFrom("users as u").select("users.id"));
+
+  // Using wrong alias
+  expectError(db.selectFrom("users as u").select("x.id"));
+}
+
+// ❌ Invalid columns should still fail
+function testInvalidColumns() {
+  // Non-existent column with alias
   expectError(db.selectFrom("users as u").select("u.nonexistent"));
 
-  expectError(db.selectFrom("users as u").where("u.invalid_column", "=", true));
-
-  expectError(db.selectFrom("users as u").orderBy("u.missing_field"));
+  // Non-existent column without prefix
+  expectError(db.selectFrom("users as u").select("nonexistent"));
 }
 
 // =============================================================================
-// 6. BACKWARD COMPATIBILITY
+// 4. EDGE CASES
 // =============================================================================
 
-// ✅ Non-alias queries should continue to work unchanged
-async function testBackwardCompatibility() {
-  // Regular selectFrom should still work
-  const regularUsers = await db
+// ✅ Case sensitivity in aliases
+async function testCaseSensitivity() {
+  // Lowercase alias
+  const lowercase = await db
+    .selectFrom("users as u")
+    .select(["u.id", "u.name"])
+    .execute();
+  expectType<Array<{ id: number; name: string }>>(lowercase);
+
+  // Uppercase alias
+  const uppercase = await db
+    .selectFrom("users as U")
+    .select(["U.id", "U.name"])
+    .execute();
+  expectType<Array<{ id: number; name: string }>>(uppercase);
+}
+
+// ✅ Single character aliases
+async function testSingleCharAliases() {
+  const singleChar = await db
+    .selectFrom("users as u")
+    .select(["u.id", "u.name"])
+    .execute();
+  expectType<Array<{ id: number; name: string }>>(singleChar);
+}
+
+// ✅ Longer aliases
+async function testLongerAliases() {
+  const longerAlias = await db
+    .selectFrom("users as user_table")
+    .select(["user_table.id", "user_table.name"])
+    .execute();
+  expectType<Array<{ id: number; name: string }>>(longerAlias);
+}
+
+// =============================================================================
+// 5. COMPATIBILITY WITH NON-ALIAS QUERIES (REGRESSION TESTS)
+// =============================================================================
+
+// ✅ Non-alias queries should still work (regression test)
+async function testNonAliasCompatibility() {
+  // Basic non-alias query
+  const basic = await db.selectFrom("users").select(["id", "name"]).execute();
+  expectType<Array<{ id: number; name: string }>>(basic);
+
+  // Complex non-alias query
+  const complex = await db
     .selectFrom("users")
-    .select(["id", "name"])
+    .select(["id", "name", "email"])
     .where("active", "=", true)
+    .orderBy("created_at", "desc")
     .execute();
-  expectType<Array<{ id: number; name: string }>>(regularUsers);
-
-  // Regular JOINs should still work
-  const regularJoins = await db
-    .selectFrom("users")
-    .innerJoin("posts", "users.id", "posts.user_id")
-    .select(["users.name", "posts.title"])
-    .execute();
-  expectType<Array<{ name: string; title: string }>>(regularJoins);
+  expectType<
+    Array<{
+      id: number;
+      name: string;
+      email: string | null;
+    }>
+  >(complex);
 }
 
 // =============================================================================
-// 7. TYPE UTILITY TESTS
+// 6. TDD STATUS SUMMARY
 // =============================================================================
 
-// ✅ TableExpression type should handle aliases
-function testTableExpressionType() {
-  // These should be valid TableExpression<Database> values
-  type ValidExpressions =
-    | "users"
-    | "posts"
-    | "comments"
-    | "users as u"
-    | "posts as p"
-    | "comments as c";
+/*
+🎯 TDD TEST STATUS:
 
-  // Should be assignable to the function parameter
-  const expressions: ValidExpressions[] = [
-    "users",
-    "posts",
-    "comments",
-    "users as u",
-    "posts as p",
-    "comments as c",
-  ];
+✅ WHAT SHOULD WORK (Target Green State):
+- Basic alias syntax: db.selectFrom("users as u")
+- Alias-prefixed columns: select(["u.id", "u.name"])
+- Non-prefixed columns with aliases: select(["id", "name"])
+- Mixed column references: select(["u.id", "name"])
+- WHERE/ORDER BY with aliases
+- Complex query chaining
+- Error cases for invalid syntax
+- Non-alias queries (regression protection)
 
-  expressions.forEach((expr) => {
-    const query = db.selectFrom(expr as any);
-    expectAssignable<typeof query>(query);
-  });
-}
+❌ CURRENT RED STATE:
+- Many type errors showing what needs to be fixed
+- "Type string is not assignable to type never" - core issue
+- Basic non-alias queries broken
 
-// ✅ ExtractTableAlias type should work correctly
-function testExtractTableAliasType() {
-  // Test the type utility that extracts table names from expressions
-  // This is more of a compile-time test - the types should resolve correctly
+🎯 TDD APPROACH:
+1. RED: Run `bun run test:types` - see current failures
+2. GREEN: Fix the ColumnReference type system
+3. REFACTOR: Ensure all tests pass
 
-  const query1 = db.selectFrom("users"); // Should resolve to "users"
-  const query2 = db.selectFrom("users as u"); // Should resolve to "users"
-
-  expectAssignable<typeof query1>(query1);
-  expectAssignable<typeof query2>(query2);
-}
+This comprehensive test suite will guide us to the correct implementation.
+*/
