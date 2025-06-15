@@ -31,7 +31,7 @@ async function playground() {
 
     const activeUsers = await db
       .selectFrom("users as u")
-      .select([""])
+      .select(["u.id"])
       .where(({ eb, or }) => [
         or([
           eb("active", "=", true),
@@ -39,7 +39,7 @@ async function playground() {
           eb("created_at", ">", "2025-01-01"),
         ]),
       ])
-      .where("created_at", "<", "2024-02-02")
+      .where("u.created_at", "<", "2024-02-02")
       .execute();
 
     console.log(`    Found ${activeUsers.length} active users`);
