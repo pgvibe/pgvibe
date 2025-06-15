@@ -13,7 +13,11 @@ import type {
 } from "../ast/select-query-node";
 import { ExpressionNodeFactory } from "../ast/expression-nodes";
 import type { PostgreSQL } from "../postgres/postgres-dialect";
-import type { RawBuilder } from "../shared-types";
+import type {
+  RawBuilder,
+  TableExpression,
+  ExtractTableAlias,
+} from "../shared-types";
 import type { SelectResult, SelectAllResult } from "../types/select-result";
 import type { Prettify } from "../types/select-result";
 import type { ValidateColumnAccess } from "../errors/validation-utils";
@@ -191,7 +195,7 @@ export type SimpleWhereValue<
 export type TypeSafeWhereValue<
   DB,
   TB extends keyof DB,
-  Column extends ColumnReference<DB, TB>,
+  Column extends ColumnReference<DB, TB, any>,
   Operator extends WhereOperator,
   Value
 > = SimpleWhereValue<ExtractColumnType<DB, TB, Column>, Operator, Value>;
@@ -252,10 +256,38 @@ export type ValidQualifiedColumnReference<
 /**
  * Intelligent ColumnReference with dramatically improved error messages
  * This replaces generic TypeScript errors with helpful, actionable guidance
+ * Now includes proper alias-prefixed column support for autocomplete
+ *
+ * Logic:
+ * - If there's an alias context: show alias-prefixed columns (u.id) + simple columns (id)
+ *   BUT NOT original table-prefixed columns (users.id)
+ * - If there's no alias context: show simple (id) and qualified columns (users.id)
  */
-export type ColumnReference<DB, TB extends keyof DB> =
-  | Extract<AllColumnsFromTables<DB, TB>, string> // Valid simple column names
-  | Extract<QualifiedColumnReference<DB, TB>, string>; // Valid qualified column names
+export type ColumnReference<
+  DB,
+  TB extends keyof DB,
+  TAliasContext extends string = never
+> = TAliasContext extends never
+  ? // No alias - show simple and qualified column names
+    | Extract<AllColumnsFromTables<DB, TB>, string> // Simple: id, name, etc.
+      | Extract<QualifiedColumnReference<DB, TB>, string> // Qualified: users.id, posts.title, etc.
+  : // Has alias - show alias-prefixed + simple columns (but NOT original table-prefixed)
+    | AliasColumnReference<DB, TB, TAliasContext> // Alias: u.id, u.name, etc.
+      | Extract<AllColumnsFromTables<DB, TB>, string>; // Simple: id, name, etc.
+
+/**
+ * Alias-prefixed column references for proper autocomplete support
+ * Generates specific alias-prefixed columns like "u.id", "u.name", etc.
+ */
+export type AliasColumnReference<
+  DB,
+  TB extends keyof DB,
+  TAliasContext extends string
+> = TAliasContext extends never
+  ? never // No alias context - no alias columns
+  : TAliasContext extends string
+  ? `${TAliasContext}.${Extract<AllColumnsFromTables<DB, TB>, string>}`
+  : never;
 
 /**
  * Enhanced column reference that shows smart error messages for invalid columns
@@ -542,28 +574,31 @@ export function parseColumnReference(columnRef: string): {
 }
 
 /**
- * SelectQueryBuilder interface with type evolution
- * Provides fluent API for building SELECT queries with compile-time type safety
- * Now includes JOIN context for nullability tracking
+ * Enhanced SelectQueryBuilder interface with alias context for proper autocomplete
  */
 export interface SelectQueryBuilder<
   DB,
   TB extends keyof DB,
   O,
-  TJoinContext extends JoinContext = readonly []
+  TJoinContext extends JoinContext = readonly [],
+  TAliasContext extends string = never
 > {
   /**
    * Add columns to the SELECT clause with intelligent error messages
+   * Now supports alias-prefixed columns with proper autocomplete
    */
   select<
-    K extends readonly ColumnReference<DB, TB>[] | ColumnReference<DB, TB>
+    K extends
+      | readonly ColumnReference<DB, TB, TAliasContext>[]
+      | ColumnReference<DB, TB, TAliasContext>
   >(
     columnsOrColumn: K
   ): SelectQueryBuilder<
     DB,
     TB,
     SelectResult<DB, TB, K, TJoinContext>,
-    TJoinContext
+    TJoinContext,
+    TAliasContext
   >;
 
   /**
@@ -573,7 +608,8 @@ export interface SelectQueryBuilder<
     DB,
     TB,
     SelectResult<DB, TB, AllColumnsAsArray<DB, TB>, TJoinContext>,
-    TJoinContext
+    TJoinContext,
+    TAliasContext
   >;
 
   /**
@@ -581,11 +617,15 @@ export interface SelectQueryBuilder<
    * Validates that the value type matches the column type and operator
    * Also supports raw SQL expressions via RawBuilder and expression builder callbacks
    */
-  where<K extends ColumnReference<DB, TB>, Op extends WhereOperator, V>(
+  where<
+    K extends ColumnReference<DB, TB, TAliasContext>,
+    Op extends WhereOperator,
+    V
+  >(
     columnOrExpression: K | RawBuilder,
     operator?: Op,
     value?: TypeSafeWhereValue<DB, TB, K, Op, V>
-  ): SelectQueryBuilder<DB, TB, O, TJoinContext>;
+  ): SelectQueryBuilder<DB, TB, O, TJoinContext, TAliasContext>;
 
   /**
    * WHERE method with expression builder callback for complex logical expressions
@@ -595,84 +635,104 @@ export interface SelectQueryBuilder<
     expression: (
       helpers: ExpressionHelpers<DB, TB>
     ) => Expression<SqlBool> | Expression<SqlBool>[]
-  ): SelectQueryBuilder<DB, TB, O, TJoinContext>;
+  ): SelectQueryBuilder<DB, TB, O, TJoinContext, TAliasContext>;
 
   /**
    * Add INNER JOIN clause to the query
    */
-  innerJoin<JT extends keyof DB>(
+  innerJoin<JT extends TableExpression<DB>>(
     table: JT,
-    onColumn1: ColumnReference<DB, TB>,
-    onColumn2: ColumnReference<DB, JT>
+    onColumn1: ColumnReference<DB, TB, TAliasContext>,
+    onColumn2: ColumnReference<DB, ExtractTableAlias<DB, JT>>
   ): SelectQueryBuilder<
     DB,
-    JoinedTables<DB, TB, JT>,
+    JoinedTables<DB, TB, ExtractTableAlias<DB, JT>>,
     O,
-    readonly [...TJoinContext, { table: JT & string; joinType: "INNER" }]
+    readonly [
+      ...TJoinContext,
+      { table: ExtractTableAlias<DB, JT> & string; joinType: "INNER" }
+    ],
+    TAliasContext
   >;
 
   /**
    * Add LEFT JOIN clause to the query
    */
-  leftJoin<JT extends keyof DB>(
+  leftJoin<JT extends TableExpression<DB>>(
     table: JT,
-    onColumn1: ColumnReference<DB, TB>,
-    onColumn2: ColumnReference<DB, JT>
+    onColumn1: ColumnReference<DB, TB, TAliasContext>,
+    onColumn2: ColumnReference<DB, ExtractTableAlias<DB, JT>>
   ): SelectQueryBuilder<
     DB,
-    JoinedTables<DB, TB, JT>,
+    JoinedTables<DB, TB, ExtractTableAlias<DB, JT>>,
     O,
-    readonly [...TJoinContext, { table: JT & string; joinType: "LEFT" }]
+    readonly [
+      ...TJoinContext,
+      { table: ExtractTableAlias<DB, JT> & string; joinType: "LEFT" }
+    ],
+    TAliasContext
   >;
 
   /**
    * Add RIGHT JOIN clause to the query
    */
-  rightJoin<JT extends keyof DB>(
+  rightJoin<JT extends TableExpression<DB>>(
     table: JT,
-    onColumn1: ColumnReference<DB, TB>,
-    onColumn2: ColumnReference<DB, JT>
+    onColumn1: ColumnReference<DB, TB, TAliasContext>,
+    onColumn2: ColumnReference<DB, ExtractTableAlias<DB, JT>>
   ): SelectQueryBuilder<
     DB,
-    JoinedTables<DB, TB, JT>,
+    JoinedTables<DB, TB, ExtractTableAlias<DB, JT>>,
     O,
-    readonly [...TJoinContext, { table: JT & string; joinType: "RIGHT" }]
+    readonly [
+      ...TJoinContext,
+      { table: ExtractTableAlias<DB, JT> & string; joinType: "RIGHT" }
+    ],
+    TAliasContext
   >;
 
   /**
    * Add FULL JOIN clause to the query
    */
-  fullJoin<JT extends keyof DB>(
+  fullJoin<JT extends TableExpression<DB>>(
     table: JT,
-    onColumn1: ColumnReference<DB, TB>,
-    onColumn2: ColumnReference<DB, JT>
+    onColumn1: ColumnReference<DB, TB, TAliasContext>,
+    onColumn2: ColumnReference<DB, ExtractTableAlias<DB, JT>>
   ): SelectQueryBuilder<
     DB,
-    JoinedTables<DB, TB, JT>,
+    JoinedTables<DB, TB, ExtractTableAlias<DB, JT>>,
     O,
-    readonly [...TJoinContext, { table: JT & string; joinType: "FULL" }]
+    readonly [
+      ...TJoinContext,
+      { table: ExtractTableAlias<DB, JT> & string; joinType: "FULL" }
+    ],
+    TAliasContext
   >;
 
   /**
    * Add ORDER BY clause to the query
    * Supports single column or multiple columns with direction
    */
-  orderBy<K extends ColumnReference<DB, TB>>(
+  orderBy<K extends ColumnReference<DB, TB, TAliasContext>>(
     columnOrColumns: K | Array<{ column: K; direction?: "asc" | "desc" }>,
     direction?: "asc" | "desc"
-  ): SelectQueryBuilder<DB, TB, O, TJoinContext>;
+  ): SelectQueryBuilder<DB, TB, O, TJoinContext, TAliasContext>;
 
   /**
    * Add LIMIT clause to the query
    * Limits the number of rows returned
    */
-  limit(count: number): SelectQueryBuilder<DB, TB, O, TJoinContext>;
+  limit(
+    count: number
+  ): SelectQueryBuilder<DB, TB, O, TJoinContext, TAliasContext>;
 
   /**
    * Add OFFSET clause to the query
    * Skips the specified number of rows
    */
-  offset(count: number): SelectQueryBuilder<DB, TB, O, TJoinContext>;
+  offset(
+    count: number
+  ): SelectQueryBuilder<DB, TB, O, TJoinContext, TAliasContext>;
 
   /**
    * Convert to AST node for compilation
@@ -703,8 +763,9 @@ export class SelectQueryBuilderImpl<
   DB,
   TB extends keyof DB,
   O,
-  TJoinContext extends JoinContext = readonly []
-> implements SelectQueryBuilder<DB, TB, O, TJoinContext>
+  TJoinContext extends JoinContext = readonly [],
+  TAliasContext extends string = never
+> implements SelectQueryBuilder<DB, TB, O, TJoinContext, TAliasContext>
 {
   private node: SelectQueryNode;
   private tableName: TB;
@@ -721,14 +782,17 @@ export class SelectQueryBuilderImpl<
   }
 
   select<
-    K extends readonly ColumnReference<DB, TB>[] | ColumnReference<DB, TB>
+    K extends
+      | readonly ColumnReference<DB, TB, TAliasContext>[]
+      | ColumnReference<DB, TB, TAliasContext>
   >(
     columnsOrColumn: K
   ): SelectQueryBuilder<
     DB,
     TB,
     SelectResult<DB, TB, K, TJoinContext>,
-    TJoinContext
+    TJoinContext,
+    TAliasContext
   > {
     // Cast to expected types since TypeScript validation ensures only valid columns reach here
     const columnArray = Array.isArray(columnsOrColumn)
@@ -751,7 +815,8 @@ export class SelectQueryBuilderImpl<
       DB,
       TB,
       SelectResult<DB, TB, K, TJoinContext>,
-      TJoinContext
+      TJoinContext,
+      TAliasContext
     >(this.tableName, this.postgres, newNode) as any;
   }
 
@@ -759,7 +824,8 @@ export class SelectQueryBuilderImpl<
     DB,
     TB,
     SelectResult<DB, TB, AllColumnsAsArray<DB, TB>, TJoinContext>,
-    TJoinContext
+    TJoinContext,
+    TAliasContext
   > {
     // For selectAll, we'll use a special star selection with raw SQL
     const starSelection: SelectionNode = {
@@ -775,11 +841,16 @@ export class SelectQueryBuilderImpl<
       DB,
       TB,
       SelectResult<DB, TB, AllColumnsAsArray<DB, TB>, TJoinContext>,
-      TJoinContext
+      TJoinContext,
+      TAliasContext
     >(this.tableName, this.postgres, newNode);
   }
 
-  where<K extends ColumnReference<DB, TB>, Op extends WhereOperator, V>(
+  where<
+    K extends ColumnReference<DB, TB, TAliasContext>,
+    Op extends WhereOperator,
+    V
+  >(
     columnOrExpression:
       | K
       | RawBuilder
@@ -791,7 +862,7 @@ export class SelectQueryBuilderImpl<
         ) => Expression<SqlBool> | Expression<SqlBool>[]),
     operator?: Op,
     value?: TypeSafeWhereValue<DB, TB, K, Op, V>
-  ): SelectQueryBuilder<DB, TB, O> {
+  ): SelectQueryBuilder<DB, TB, O, TJoinContext, TAliasContext> {
     let whereExpression: ExpressionNode;
 
     if (typeof columnOrExpression === "function") {
@@ -872,7 +943,7 @@ export class SelectQueryBuilderImpl<
 
     const newNode = SelectQueryNode.cloneWithWhere(this.node, whereNode);
 
-    return new SelectQueryBuilderImpl<DB, TB, O>(
+    return new SelectQueryBuilderImpl<DB, TB, O, TJoinContext, TAliasContext>(
       this.tableName,
       this.postgres,
       newNode
@@ -953,10 +1024,10 @@ export class SelectQueryBuilderImpl<
     return this.node;
   }
 
-  orderBy<K extends ColumnReference<DB, TB>>(
+  orderBy<K extends ColumnReference<DB, TB, TAliasContext>>(
     columnOrColumns: K | Array<{ column: K; direction?: "asc" | "desc" }>,
     direction?: "asc" | "desc"
-  ): SelectQueryBuilder<DB, TB, O> {
+  ): SelectQueryBuilder<DB, TB, O, TJoinContext, TAliasContext> {
     let orderByItems: import("../ast/select-query-node").OrderByItemNode[];
 
     if (Array.isArray(columnOrColumns)) {
@@ -992,14 +1063,16 @@ export class SelectQueryBuilderImpl<
 
     const newNode = SelectQueryNode.cloneWithOrderBy(this.node, orderByNode);
 
-    return new SelectQueryBuilderImpl<DB, TB, O>(
+    return new SelectQueryBuilderImpl<DB, TB, O, TJoinContext, TAliasContext>(
       this.tableName,
       this.postgres,
       newNode
     );
   }
 
-  limit(count: number): SelectQueryBuilder<DB, TB, O> {
+  limit(
+    count: number
+  ): SelectQueryBuilder<DB, TB, O, TJoinContext, TAliasContext> {
     const limitNode: import("../ast/select-query-node").LimitNode = {
       kind: "LimitNode" as const,
       limit: count,
@@ -1007,14 +1080,16 @@ export class SelectQueryBuilderImpl<
 
     const newNode = SelectQueryNode.cloneWithLimit(this.node, limitNode);
 
-    return new SelectQueryBuilderImpl<DB, TB, O>(
+    return new SelectQueryBuilderImpl<DB, TB, O, TJoinContext, TAliasContext>(
       this.tableName,
       this.postgres,
       newNode
     );
   }
 
-  offset(count: number): SelectQueryBuilder<DB, TB, O> {
+  offset(
+    count: number
+  ): SelectQueryBuilder<DB, TB, O, TJoinContext, TAliasContext> {
     const offsetNode: import("../ast/select-query-node").OffsetNode = {
       kind: "OffsetNode" as const,
       offset: count,
@@ -1022,55 +1097,110 @@ export class SelectQueryBuilderImpl<
 
     const newNode = SelectQueryNode.cloneWithOffset(this.node, offsetNode);
 
-    return new SelectQueryBuilderImpl<DB, TB, O>(
+    return new SelectQueryBuilderImpl<DB, TB, O, TJoinContext, TAliasContext>(
       this.tableName,
       this.postgres,
       newNode
     );
   }
 
-  innerJoin<JT extends keyof DB>(
+  innerJoin<JT extends TableExpression<DB>>(
     table: JT,
-    onColumn1: ColumnReference<DB, TB>,
-    onColumn2: ColumnReference<DB, JT>
-  ): SelectQueryBuilder<DB, JoinedTables<DB, TB, JT>, O> {
+    onColumn1: ColumnReference<DB, TB, TAliasContext>,
+    onColumn2: ColumnReference<DB, ExtractTableAlias<DB, JT>>
+  ): SelectQueryBuilder<
+    DB,
+    JoinedTables<DB, TB, ExtractTableAlias<DB, JT>>,
+    O,
+    readonly [
+      ...TJoinContext,
+      { table: ExtractTableAlias<DB, JT> & string; joinType: "INNER" }
+    ],
+    TAliasContext
+  > {
     return this.createJoin("INNER JOIN", table, onColumn1, onColumn2);
   }
 
-  leftJoin<JT extends keyof DB>(
+  leftJoin<JT extends TableExpression<DB>>(
     table: JT,
-    onColumn1: ColumnReference<DB, TB>,
-    onColumn2: ColumnReference<DB, JT>
-  ): SelectQueryBuilder<DB, JoinedTables<DB, TB, JT>, O> {
+    onColumn1: ColumnReference<DB, TB, TAliasContext>,
+    onColumn2: ColumnReference<DB, ExtractTableAlias<DB, JT>>
+  ): SelectQueryBuilder<
+    DB,
+    JoinedTables<DB, TB, ExtractTableAlias<DB, JT>>,
+    O,
+    readonly [
+      ...TJoinContext,
+      { table: ExtractTableAlias<DB, JT> & string; joinType: "LEFT" }
+    ],
+    TAliasContext
+  > {
     return this.createJoin("LEFT JOIN", table, onColumn1, onColumn2);
   }
 
-  rightJoin<JT extends keyof DB>(
+  rightJoin<JT extends TableExpression<DB>>(
     table: JT,
-    onColumn1: ColumnReference<DB, TB>,
-    onColumn2: ColumnReference<DB, JT>
-  ): SelectQueryBuilder<DB, JoinedTables<DB, TB, JT>, O> {
+    onColumn1: ColumnReference<DB, TB, TAliasContext>,
+    onColumn2: ColumnReference<DB, ExtractTableAlias<DB, JT>>
+  ): SelectQueryBuilder<
+    DB,
+    JoinedTables<DB, TB, ExtractTableAlias<DB, JT>>,
+    O,
+    readonly [
+      ...TJoinContext,
+      { table: ExtractTableAlias<DB, JT> & string; joinType: "RIGHT" }
+    ],
+    TAliasContext
+  > {
     return this.createJoin("RIGHT JOIN", table, onColumn1, onColumn2);
   }
 
-  fullJoin<JT extends keyof DB>(
+  fullJoin<JT extends TableExpression<DB>>(
     table: JT,
-    onColumn1: ColumnReference<DB, TB>,
-    onColumn2: ColumnReference<DB, JT>
-  ): SelectQueryBuilder<DB, JoinedTables<DB, TB, JT>, O> {
+    onColumn1: ColumnReference<DB, TB, TAliasContext>,
+    onColumn2: ColumnReference<DB, ExtractTableAlias<DB, JT>>
+  ): SelectQueryBuilder<
+    DB,
+    JoinedTables<DB, TB, ExtractTableAlias<DB, JT>>,
+    O,
+    readonly [
+      ...TJoinContext,
+      { table: ExtractTableAlias<DB, JT> & string; joinType: "FULL" }
+    ],
+    TAliasContext
+  > {
     return this.createJoin("FULL JOIN", table, onColumn1, onColumn2);
   }
 
-  private createJoin<JT extends keyof DB>(
+  private createJoin<JT extends TableExpression<DB>>(
     joinType: "INNER JOIN" | "LEFT JOIN" | "RIGHT JOIN" | "FULL JOIN",
-    table: JT,
-    onColumn1: ColumnReference<DB, TB>,
-    onColumn2: ColumnReference<DB, JT>
-  ): SelectQueryBuilder<DB, JoinedTables<DB, TB, JT>, O> {
-    // Create table reference node
+    tableExpression: JT,
+    onColumn1: ColumnReference<DB, TB, TAliasContext>,
+    onColumn2: ColumnReference<DB, ExtractTableAlias<DB, JT>>
+  ): SelectQueryBuilder<
+    DB,
+    JoinedTables<DB, TB, ExtractTableAlias<DB, JT>>,
+    O,
+    readonly [
+      ...TJoinContext,
+      { table: ExtractTableAlias<DB, JT> & string; joinType: "INNER" }
+    ],
+    TAliasContext
+  > {
+    // Import the parsing function
+    const {
+      parseTableExpression,
+    } = require("../utils/table-expression-parser");
+
+    // Parse the table expression to extract table name and alias
+    const parsed = parseTableExpression(String(tableExpression));
+    const actualTableName = parsed.table as ExtractTableAlias<DB, JT>;
+
+    // Create table reference node with alias support
     const tableRef: TableReferenceNode = {
       kind: "TableReferenceNode" as const,
-      table: String(table),
+      table: parsed.table,
+      alias: parsed.alias,
     };
 
     // Parse qualified column references properly
@@ -1088,7 +1218,7 @@ export class SelectQueryBuilderImpl<
     );
     const rightReference = ExpressionNodeFactory.createReference(
       rightColumn,
-      rightTable || String(table) // Use parsed table or default to joined table
+      rightTable || parsed.alias || actualTableName // Use parsed table, alias, or actual table name
     );
 
     const onExpression = ExpressionNodeFactory.createBinaryOperation(
@@ -1113,29 +1243,85 @@ export class SelectQueryBuilderImpl<
     // Clone the query node with the new JOIN
     const newNode = SelectQueryNode.cloneWithJoin(this.node, joinNode);
 
-    return new SelectQueryBuilderImpl<DB, JoinedTables<DB, TB, JT>, O>(
-      this.tableName,
-      this.postgres,
-      newNode
-    );
+    return new SelectQueryBuilderImpl<
+      DB,
+      JoinedTables<DB, TB, ExtractTableAlias<DB, JT>>,
+      O,
+      readonly [
+        ...TJoinContext,
+        { table: ExtractTableAlias<DB, JT> & string; joinType: "INNER" }
+      ],
+      TAliasContext
+    >(this.tableName, this.postgres, newNode);
   }
 }
 
 /**
  * Type helper for creating SelectQueryBuilder instances
  * Uses Prettify to ensure TypeScript displays the expanded object type
+ * Now extracts alias context for proper autocomplete support
  */
 export type CreateSelectQueryBuilder<
   DB,
-  TB extends keyof DB
-> = SelectQueryBuilder<DB, TB, Prettify<DB[TB]>>;
+  TB extends keyof DB,
+  TE extends TableExpression<DB> = TB & string
+> = TE extends string
+  ? SelectQueryBuilder<
+      DB,
+      TB,
+      Prettify<DB[TB]>,
+      readonly [],
+      import("../utils/alias-extraction").ExtractAlias<TE>
+    >
+  : SelectQueryBuilder<DB, TB, Prettify<DB[TB]>>;
 
 /**
  * Factory function for creating SelectQueryBuilder instances
  */
-export function createSelectQueryBuilder<DB, TB extends keyof DB>(
+export function createSelectQueryBuilder<DB, TE extends TableExpression<DB>>(
   postgres: PostgreSQL,
-  table: TB & string
-): CreateSelectQueryBuilder<DB, TB> {
-  return new SelectQueryBuilderImpl<DB, TB, DB[TB]>(table, postgres);
+  tableExpression: TE
+): CreateSelectQueryBuilder<DB, ExtractTableAlias<DB, TE>, TE> {
+  // Import the parsing function
+  const { parseTableExpression } = require("../utils/table-expression-parser");
+
+  // Parse the table expression to extract table name and alias
+  const parsed = parseTableExpression(String(tableExpression));
+  const tableName = parsed.table as ExtractTableAlias<DB, TE>;
+
+  // Create initial SelectQueryBuilder with the real table name
+  const builder = new SelectQueryBuilderImpl<
+    DB,
+    ExtractTableAlias<DB, TE>,
+    DB[ExtractTableAlias<DB, TE>]
+  >(tableName, postgres);
+
+  // If there's an alias, we need to set up the FROM clause with the alias
+  if (parsed.alias) {
+    // Create the AST node with table and alias
+    const tableRef: TableReferenceNode = {
+      kind: "TableReferenceNode" as const,
+      table: parsed.table,
+      alias: parsed.alias,
+    };
+
+    const fromNode: FromNode = {
+      kind: "FromNode" as const,
+      table: tableRef,
+    };
+
+    const nodeWithFrom = SelectQueryNode.cloneWithFrom(
+      SelectQueryNode.create(),
+      fromNode
+    );
+
+    // Return builder with the proper FROM clause already set
+    return new SelectQueryBuilderImpl<
+      DB,
+      ExtractTableAlias<DB, TE>,
+      DB[ExtractTableAlias<DB, TE>]
+    >(tableName, postgres, nodeWithFrom) as any;
+  }
+
+  return builder as any;
 }

@@ -11,13 +11,37 @@ export interface RawBuilder {
 
 /**
  * Table expression types for type-safe table references
+ * Supports both simple table names and alias syntax
  */
-export type TableExpression<DB> = keyof DB & string;
+export type TableExpression<DB> =
+  | (keyof DB & string) // Simple table name: "users"
+  | TableWithAlias<DB>; // Alias syntax: "users as u"
+
+/**
+ * Table with alias syntax type - accepts any string (runtime parsing handles validation)
+ */
+export type TableWithAlias<DB> = string;
 
 /**
  * Extract table alias from table expressions
+ * For aliased tables, returns the table name, not the alias
+ * Supports case-insensitive AS keyword
  */
-export type ExtractTableAlias<DB, TE> = TE extends keyof DB ? TE : never;
+export type ExtractTableAlias<DB, TE> = TE extends keyof DB
+  ? TE // Simple table name
+  : TE extends `${infer T} as ${string}`
+  ? T extends keyof DB
+    ? T // Extract table name from alias
+    : never
+  : TE extends `${infer T} AS ${string}`
+  ? T extends keyof DB
+    ? T // Extract table name from alias (uppercase AS)
+    : never
+  : TE extends `${infer T} As ${string}`
+  ? T extends keyof DB
+    ? T // Extract table name from alias (mixed case As)
+    : never
+  : never;
 
 // Example database types for testing and documentation
 // Users should define their own database types in real applications

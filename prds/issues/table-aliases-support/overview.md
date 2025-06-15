@@ -226,3 +226,41 @@ const candidates = await db
 ```
 
 This improves code readability and reduces ambiguity in complex queries involving multiple tables.
+
+## Phase 1 Implementation Findings
+
+### ✅ Phase 1.1: Architecture Deep Dive Complete
+
+**Key Discovery**: Most alias infrastructure already exists!
+
+- **SQL Compilation**: `PostgresQueryCompiler.visitTableReference()` already handles `node.alias`
+- **Column Parsing**: `parseColumnReference()` already parses `"table.column"` format
+- **AST Structure**: `TableReferenceNode` already has `alias` property
+- **Missing**: Only alias parsing in `selectFrom()` and type system updates
+
+### ✅ Phase 1.2: Parsing Strategy Complete
+
+**Robust regex-based approach**:
+
+- Handles case insensitive `AS` keyword
+- Flexible whitespace support
+- SQL identifier validation
+- Reserved word checking
+- **Pattern**: `/^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s+as\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*$/i`
+
+### ✅ Phase 1.3: TDD Foundation Complete
+
+**Comprehensive test suite established**:
+
+- **File**: `tests/builders/table-aliases.test.ts`
+- **Test Results**: 18 failing tests (expected), 469 passing tests (no regression)
+- **Coverage**: All phases from basic parsing to complex JOINs
+- **Approach**: Tests fail first, implementation makes them pass incrementally
+
+### 🎯 Next: Phase 2 Implementation
+
+The TDD foundation shows that Phase 2 (Core Alias Parsing) will be straightforward since:
+
+1. Infrastructure exists (SQL compilation, AST nodes)
+2. Tests clearly define expected behavior
+3. Implementation scope is well-defined (parsing + type system)
