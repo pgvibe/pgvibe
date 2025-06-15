@@ -267,13 +267,9 @@ export type ColumnReference<
   DB,
   TB extends keyof DB,
   TAliasContext extends string = never
-> = TAliasContext extends never
-  ? // No alias - show simple and qualified column names
-    | Extract<AllColumnsFromTables<DB, TB>, string> // Simple: id, name, etc.
-      | Extract<QualifiedColumnReference<DB, TB>, string> // Qualified: users.id, posts.title, etc.
-  : // Has alias - show alias-prefixed + simple columns (but NOT original table-prefixed)
-    | AliasColumnReference<DB, TB, TAliasContext> // Alias: u.id, u.name, etc.
-      | Extract<AllColumnsFromTables<DB, TB>, string>; // Simple: id, name, etc.
+> =
+  | Extract<AllColumnsFromTables<DB, TB>, string> // Simple: id, name, etc.
+  | Extract<QualifiedColumnReference<DB, TB>, string>; // Qualified: users.id, posts.title, etc.
 
 /**
  * Alias-prefixed column references for proper autocomplete support
@@ -1265,15 +1261,7 @@ export type CreateSelectQueryBuilder<
   DB,
   TB extends keyof DB,
   TE extends TableExpression<DB> = TB & string
-> = TE extends string
-  ? SelectQueryBuilder<
-      DB,
-      TB,
-      Prettify<DB[TB]>,
-      readonly [],
-      import("../utils/alias-extraction").ExtractAlias<TE>
-    >
-  : SelectQueryBuilder<DB, TB, Prettify<DB[TB]>>;
+> = SelectQueryBuilder<DB, TB, Prettify<DB[TB]>>;
 
 /**
  * Factory function for creating SelectQueryBuilder instances
