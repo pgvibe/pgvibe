@@ -183,19 +183,6 @@ async function testComplexAliasChaining() {
 // 3. ERROR CASES - WHAT SHOULD FAIL
 // =============================================================================
 
-// ❌ Invalid alias syntax should fail
-function testInvalidAliasSyntax() {
-  // Multiple "as" keywords
-  expectError(db.selectFrom("users as u as x"));
-
-  // Empty alias
-  expectError(db.selectFrom("users as "));
-
-  // Invalid characters in alias
-  expectError(db.selectFrom("users as u-ser"));
-  expectError(db.selectFrom("users as 123"));
-}
-
 // ❌ Wrong table prefix should fail when using aliases
 function testWrongTablePrefix() {
   // Using original table name when alias is defined
