@@ -42,21 +42,23 @@ export type Prettify<T> = {
 
 /**
  * Enhanced SelectResult type that creates clean result objects from column selections
- * Now supports JOIN context for proper nullability handling
+ * Now supports JOIN context for proper nullability handling and alias context for alias resolution
  * Uses Prettify to ensure TypeScript displays the expanded object type
  */
 export type SelectResult<
   TDatabase,
   TTables extends keyof TDatabase,
   TColumns,
-  TJoinContext extends JoinContext = readonly []
+  TJoinContext extends JoinContext = readonly [],
+  TAliasContext extends string = never
 > = TColumns extends readonly string[]
   ? Prettify<{
       [K in TColumns[number] as ExtractColumnName<K>]: ResolveColumnTypeWithJoins<
         TDatabase,
         TTables,
         K,
-        TJoinContext
+        TJoinContext,
+        TAliasContext
       >;
     }>
   : TColumns extends string
@@ -65,20 +67,27 @@ export type SelectResult<
         TDatabase,
         TTables,
         TColumns,
-        TJoinContext
+        TJoinContext,
+        TAliasContext
       >;
     }>
   : never;
 
 /**
- * Enhanced ResolveColumnType that considers JOIN nullability
+ * Enhanced ResolveColumnType that considers JOIN nullability and alias context
  */
 export type ResolveColumnTypeWithJoins<
   TDatabase,
   TTables extends keyof TDatabase,
   TColumn extends string,
-  TJoinContext extends JoinContext
-> = ResolveColumnType<TDatabase, TTables, TColumn> extends infer BaseType
+  TJoinContext extends JoinContext,
+  TAliasContext extends string = never
+> = ResolveColumnTypeWithAlias<
+  TDatabase,
+  TTables,
+  TColumn,
+  TAliasContext
+> extends infer BaseType
   ? IsColumnFromNullableTable<
       TDatabase,
       TTables,
@@ -87,6 +96,40 @@ export type ResolveColumnTypeWithJoins<
     > extends true
     ? BaseType | null
     : BaseType
+  : never;
+
+/**
+ * Resolve column type with alias awareness
+ * Maps alias-prefixed columns (u.id) to actual table columns (users.id)
+ */
+export type ResolveColumnTypeWithAlias<
+  TDatabase,
+  TTables extends keyof TDatabase,
+  TColumn extends string,
+  TAliasContext extends string = never
+> = TColumn extends `${infer Prefix}.${infer ColumnName}`
+  ? // Qualified column - check if prefix is an alias
+    [TAliasContext] extends [never]
+    ? // No alias context - treat as regular qualified column
+      Prefix extends TTables & keyof TDatabase
+      ? ColumnName extends keyof TDatabase[Prefix]
+        ? TDatabase[Prefix][ColumnName]
+        : never
+      : never
+    : // Has alias context - map alias to actual table
+    Prefix extends TAliasContext
+    ? ColumnName extends keyof TDatabase[TTables]
+      ? TDatabase[TTables][ColumnName]
+      : never
+    : // Not using the alias, treat as regular qualified column
+    Prefix extends TTables & keyof TDatabase
+    ? ColumnName extends keyof TDatabase[Prefix]
+      ? TDatabase[Prefix][ColumnName]
+      : never
+    : never
+  : // Simple column name
+  TColumn extends keyof TDatabase[TTables]
+  ? TDatabase[TTables][TColumn]
   : never;
 
 /**

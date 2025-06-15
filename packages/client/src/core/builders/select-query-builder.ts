@@ -593,7 +593,7 @@ export interface SelectQueryBuilder<
   ): SelectQueryBuilder<
     DB,
     TB,
-    SelectResult<DB, TB, K, TJoinContext>,
+    SelectResult<DB, TB, K, TJoinContext, TAliasContext>,
     TJoinContext,
     TAliasContext
   >;
@@ -604,7 +604,13 @@ export interface SelectQueryBuilder<
   selectAll(): SelectQueryBuilder<
     DB,
     TB,
-    SelectResult<DB, TB, AllColumnsAsArray<DB, TB>, TJoinContext>,
+    SelectResult<
+      DB,
+      TB,
+      AllColumnsAsArray<DB, TB>,
+      TJoinContext,
+      TAliasContext
+    >,
     TJoinContext,
     TAliasContext
   >;
@@ -787,7 +793,7 @@ export class SelectQueryBuilderImpl<
   ): SelectQueryBuilder<
     DB,
     TB,
-    SelectResult<DB, TB, K, TJoinContext>,
+    SelectResult<DB, TB, K, TJoinContext, TAliasContext>,
     TJoinContext,
     TAliasContext
   > {
@@ -811,7 +817,7 @@ export class SelectQueryBuilderImpl<
     return new SelectQueryBuilderImpl<
       DB,
       TB,
-      SelectResult<DB, TB, K, TJoinContext>,
+      SelectResult<DB, TB, K, TJoinContext, TAliasContext>,
       TJoinContext,
       TAliasContext
     >(this.tableName, this.postgres, newNode) as any;
@@ -820,7 +826,13 @@ export class SelectQueryBuilderImpl<
   selectAll(): SelectQueryBuilder<
     DB,
     TB,
-    SelectResult<DB, TB, AllColumnsAsArray<DB, TB>, TJoinContext>,
+    SelectResult<
+      DB,
+      TB,
+      AllColumnsAsArray<DB, TB>,
+      TJoinContext,
+      TAliasContext
+    >,
     TJoinContext,
     TAliasContext
   > {
@@ -837,7 +849,13 @@ export class SelectQueryBuilderImpl<
     return new SelectQueryBuilderImpl<
       DB,
       TB,
-      SelectResult<DB, TB, AllColumnsAsArray<DB, TB>, TJoinContext>,
+      SelectResult<
+        DB,
+        TB,
+        AllColumnsAsArray<DB, TB>,
+        TJoinContext,
+        TAliasContext
+      >,
       TJoinContext,
       TAliasContext
     >(this.tableName, this.postgres, newNode);

@@ -162,24 +162,22 @@ export type DetectDuplicateProperties<TColumns extends readonly string[]> =
 /**
  * FIXED: Resolve the actual database column type for a given column reference
  * Handles both simple and qualified column names
- * Now properly handles single table keys (the main bug fix)
+ * Simplified approach that works better with TypeScript's type resolution
  */
 export type ResolveColumnType<
   TDatabase,
   TTables extends keyof TDatabase,
   TColumn extends string
-> = IsQualifiedColumn<TColumn> extends true
+> = TColumn extends `${infer Table}.${infer Column}`
   ? // Qualified column: "table.column"
-    ExtractTableName<TColumn> extends TTables & keyof TDatabase
-    ? ExtractColumnName<TColumn> extends keyof TDatabase[ExtractTableName<TColumn>]
-      ? TDatabase[ExtractTableName<TColumn>][ExtractColumnName<TColumn>]
+    Table extends TTables & keyof TDatabase
+    ? Column extends keyof TDatabase[Table]
+      ? TDatabase[Table][Column]
       : never
     : never
-  : // Simple column name - FIXED logic for single vs multiple tables
-  TTables extends keyof TDatabase
-  ? TColumn extends keyof TDatabase[TTables]
-    ? TDatabase[TTables][TColumn]
-    : never
+  : // Simple column name
+  TColumn extends keyof TDatabase[TTables]
+  ? TDatabase[TTables][TColumn]
   : never;
 
 /**
