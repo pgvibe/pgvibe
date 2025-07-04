@@ -34,12 +34,12 @@ async function playground() {
       .select(["id", "name"])
       .where(({ eb, or }) => [
         or([
-          eb("active", "=", true),
+          eb("active", "=", false),
           eb("name", "=", "johan"),
           eb("created_at", ">", "2025-01-01"),
         ]),
       ])
-      .where('created_at', '<', '2024-02-02')
+      .where("created_at", "<", "2024-02-02")
       .execute();
 
     console.log(`    Found ${activeUsers.length} active users`);
