@@ -105,6 +105,7 @@ export function parseTableExpression(expression: string): {
 /**
  * Runtime utility to parse column expressions
  * Extracts column name and alias from expressions like "column as alias"
+ * Handles quoted aliases like "column as \"My Alias\""
  */
 export function parseColumnExpression(expression: string): {
   column: string;
@@ -118,7 +119,14 @@ export function parseColumnExpression(expression: string): {
   }
 
   const column = trimmed.substring(0, asIndex).trim();
-  const alias = trimmed.substring(asIndex + 4).trim();
+  let alias = trimmed.substring(asIndex + 4).trim();
+
+  // Remove surrounding quotes if present
+  if (alias.startsWith('"') && alias.endsWith('"')) {
+    alias = alias.slice(1, -1);
+  } else if (alias.startsWith("'") && alias.endsWith("'")) {
+    alias = alias.slice(1, -1);
+  }
 
   return { column, alias };
 }
@@ -163,6 +171,7 @@ export type MultiTableExpression<DB> = readonly string[];
 /**
  * Helper type to get column references from multiple table expressions
  * This combines columns from all tables in the multi-table expression
+ * Also supports column aliases with "as" keyword
  */
 export type GetMultiTableColumnReferences<
   DB,
@@ -181,6 +190,7 @@ export type GetMultiTableColumnReferences<
  * For single table: returns both qualified and unqualified columns
  * For multi-table: returns columns from all tables
  * CRITICAL: When using aliases, original table names are NOT allowed
+ * Also supports column aliases with "as" keyword
  */
 export type GetColumnReferences<
   DB,
@@ -194,13 +204,23 @@ export type GetColumnReferences<
     }
     ? TableName extends keyof DB
       ? AliasName extends never
-        ? // NO ALIAS: Allow both table.column and column
+        ? // NO ALIAS: Allow both table.column and column, plus column aliases
           | Extract<keyof DB[TableName], string> // Unqualified: id, name, email
             | `${TableName & string}.${Extract<keyof DB[TableName], string>}` // Qualified: users.id, users.name
+            | `${Extract<keyof DB[TableName], string>} as ${string}` // Column aliases: name as user_name
+            | `${TableName & string}.${Extract<
+                keyof DB[TableName],
+                string
+              >} as ${string}` // Qualified column aliases: users.name as user_name
         : AliasName extends string
-        ? // HAS ALIAS: Only allow alias.column and column (NOT table.column)
+        ? // HAS ALIAS: Only allow alias.column and column (NOT table.column), plus column aliases
           | Extract<keyof DB[TableName], string> // Unqualified: id, name, email
             | `${AliasName}.${Extract<keyof DB[TableName], string>}` // Qualified: u.id, u.name (NOT users.id)
+            | `${Extract<keyof DB[TableName], string>} as ${string}` // Column aliases: name as user_name
+            | `${AliasName}.${Extract<
+                keyof DB[TableName],
+                string
+              >} as ${string}` // Qualified column aliases: u.name as user_name
         : never
       : never
     : never

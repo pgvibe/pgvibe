@@ -17,8 +17,8 @@ describe("Alias Expression Builder Tests", () => {
       console.log("Basic alias SELECT SQL:", compiled.sql);
 
       expect(compiled.sql).toContain("FROM users AS u");
-      expect(compiled.sql).toContain('"u.name"');
-      expect(compiled.sql).toContain('"u.email"');
+      expect(compiled.sql).toContain("u.name");
+      expect(compiled.sql).toContain("u.email");
     });
 
     it("should support mixed qualified and unqualified columns", () => {
@@ -32,9 +32,9 @@ describe("Alias Expression Builder Tests", () => {
       console.log("Mixed columns SQL:", compiled.sql);
 
       expect(compiled.sql).toContain("FROM users AS u");
-      expect(compiled.sql).toContain('"u.name"');
+      expect(compiled.sql).toContain("u.name");
       expect(compiled.sql).toContain("email");
-      expect(compiled.sql).toContain('"u.id"');
+      expect(compiled.sql).toContain("u.id");
       expect(compiled.sql).toContain("active");
     });
 
@@ -52,8 +52,8 @@ describe("Alias Expression Builder Tests", () => {
       expect(compiled.sql).toContain("FROM users AS u");
       expect(compiled.sql).toContain("INNER JOIN posts AS p");
       expect(compiled.sql).toContain("ON u.id = p.user_id");
-      expect(compiled.sql).toContain('"u.name"');
-      expect(compiled.sql).toContain('"p.title"');
+      expect(compiled.sql).toContain("u.name");
+      expect(compiled.sql).toContain("p.title");
       expect(compiled.sql).toContain("content");
     });
 
@@ -71,9 +71,9 @@ describe("Alias Expression Builder Tests", () => {
 
       expect(compiled.sql).toContain("FROM users AS u");
       expect(compiled.sql).toContain("INNER JOIN posts AS p");
-      expect(compiled.sql).toContain('"u.name"');
-      expect(compiled.sql).toContain('"p.title"');
-      expect(compiled.sql).toContain('"c.content"');
+      expect(compiled.sql).toContain("u.name");
+      expect(compiled.sql).toContain("p.title");
+      expect(compiled.sql).toContain("c.content");
     });
   });
 
@@ -98,8 +98,8 @@ describe("Alias Expression Builder Tests", () => {
 
       // Currently works
       expect(compiled.sql).toContain("FROM users AS u");
-      expect(compiled.sql).toContain('"u.name"');
-      expect(compiled.sql).toContain('"u.email"');
+      expect(compiled.sql).toContain("u.name");
+      expect(compiled.sql).toContain("u.email");
 
       // TODO: Should contain WHERE clause with aliases
       // expect(compiled.sql).toContain("WHERE (u.active = $1 OR u.name = $2 OR u.created_at > $3)");
@@ -151,8 +151,8 @@ describe("Alias Expression Builder Tests", () => {
       // Currently works
       expect(compiled.sql).toContain("FROM users AS u");
       expect(compiled.sql).toContain("INNER JOIN posts AS p");
-      expect(compiled.sql).toContain('"u.name"');
-      expect(compiled.sql).toContain('"p.title"');
+      expect(compiled.sql).toContain("u.name");
+      expect(compiled.sql).toContain("p.title");
 
       // TODO: Should contain complex WHERE clause with aliases
       // expect(compiled.sql).toContain("WHERE (u.active = $1 AND (p.published = $2 OR u.name = $3))");
@@ -202,6 +202,110 @@ describe("Alias Expression Builder Tests", () => {
     });
   });
 
+  describe("Expression Builder WHERE Support - Current Issue", () => {
+    it("should support eb() function with aliases in WHERE clause", () => {
+      const query = db
+        .selectFrom("users as u")
+        .select(["u.name", "u.email"])
+        .where(({ eb, or }) => [
+          or([
+            eb("u.active", "=", true),
+            eb("u.name", "=", "johan"),
+            eb("u.created_at", ">", "2025-01-01"),
+          ]),
+        ]);
+
+      expect(query).toBeDefined();
+
+      const compiled = query.compile();
+      console.log("Expression builder with aliases SQL:", compiled.sql);
+      console.log(
+        "Expression builder with aliases params:",
+        compiled.parameters
+      );
+
+      // Should contain the FROM clause with alias
+      expect(compiled.sql).toContain("FROM users AS u");
+
+      // Should contain the WHERE clause with aliased column references
+      expect(compiled.sql).toContain("u.active");
+      expect(compiled.sql).toContain("u.name");
+      expect(compiled.sql).toContain("u.created_at");
+
+      // Should contain the parameters
+      expect(compiled.parameters).toContain(true);
+      expect(compiled.parameters).toContain("johan");
+      expect(compiled.parameters).toContain("2025-01-01");
+    });
+
+    it("should support eb() function with multi-table aliases in WHERE clause", () => {
+      const query = db
+        .selectFrom("users as u")
+        .innerJoin("posts as p", "u.id", "p.user_id")
+        .select(["u.name", "p.title"])
+        .where(({ eb, and, or }) => [
+          and([
+            eb("u.active", "=", true),
+            or([eb("p.published", "=", true), eb("u.name", "=", "admin")]),
+          ]),
+        ]);
+
+      expect(query).toBeDefined();
+
+      const compiled = query.compile();
+      console.log("Multi-table expression builder SQL:", compiled.sql);
+      console.log(
+        "Multi-table expression builder params:",
+        compiled.parameters
+      );
+
+      // Should contain the FROM and JOIN clauses with aliases
+      expect(compiled.sql).toContain("FROM users AS u");
+      expect(compiled.sql).toContain("INNER JOIN posts AS p");
+
+      // Should contain the WHERE clause with aliased column references
+      expect(compiled.sql).toContain("u.active");
+      expect(compiled.sql).toContain("p.published");
+      expect(compiled.sql).toContain("u.name");
+
+      // Should contain the parameters
+      expect(compiled.parameters).toContain(true);
+      expect(compiled.parameters).toContain("admin");
+    });
+
+    it("should support the exact user example pattern", () => {
+      const activeUsers = db
+        .selectFrom("users as u")
+        .select(["id", "name"])
+        .where(({ eb, or }) => [
+          or([eb("u.active", "=", false), eb("u.name", "=", "test")]),
+        ]);
+
+      expect(activeUsers).toBeDefined();
+
+      const compiled = activeUsers.compile();
+      console.log("User example SQL:", compiled.sql);
+      console.log("User example params:", compiled.parameters);
+
+      // Should contain the FROM clause with alias
+      expect(compiled.sql).toContain("FROM users AS u");
+
+      // Should contain the WHERE clause with aliased column references
+      expect(compiled.sql).toContain("u.active");
+      expect(compiled.sql).toContain("u.name");
+
+      // Should contain the parameters
+      expect(compiled.parameters).toContain(false);
+      expect(compiled.parameters).toContain("test");
+
+      // Verify the exact pattern the user wanted
+      expect(compiled.sql).toBe(
+        "SELECT id, name FROM users AS u WHERE u.active = $1 OR u.name = $2"
+      );
+      expect(compiled.parameters).toEqual([false, "test"]);
+    });
+  });
+
   describe("Real-world Scenarios - Current Capabilities", () => {
     it("should handle complex SELECT with aliases", () => {
       const query = db
@@ -224,11 +328,11 @@ describe("Alias Expression Builder Tests", () => {
 
       expect(compiled.sql).toContain("FROM users AS u");
       expect(compiled.sql).toContain("INNER JOIN posts AS p");
-      expect(compiled.sql).toContain('"u.name"');
-      expect(compiled.sql).toContain('"u.email"');
-      expect(compiled.sql).toContain('"p.title"');
-      expect(compiled.sql).toContain('"p.content"');
-      expect(compiled.sql).toContain('"c.content"');
+      expect(compiled.sql).toContain("u.name");
+      expect(compiled.sql).toContain("u.email");
+      expect(compiled.sql).toContain("p.title");
+      expect(compiled.sql).toContain("p.content");
+      expect(compiled.sql).toContain("c.content");
       expect(compiled.sql).toContain("created_at");
     });
 

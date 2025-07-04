@@ -22,8 +22,8 @@ describe("Alias Integration Tests", () => {
       console.log("Single table alias SQL:", compiled.sql);
 
       expect(compiled.sql).toContain("FROM users AS u");
-      expect(compiled.sql).toContain('"u.name"');
-      expect(compiled.sql).toContain('"u.email"');
+      expect(compiled.sql).toContain("u.name");
+      expect(compiled.sql).toContain("u.email");
       expect(compiled.sql).toContain("LIMIT 1");
 
       // Test that the query can be executed without errors
@@ -41,9 +41,9 @@ describe("Alias Integration Tests", () => {
       console.log("Mixed columns SQL:", compiled.sql);
 
       expect(compiled.sql).toContain("FROM users AS u");
-      expect(compiled.sql).toContain('"u.name"');
+      expect(compiled.sql).toContain("u.name");
       expect(compiled.sql).toContain("email");
-      expect(compiled.sql).toContain('"u.id"');
+      expect(compiled.sql).toContain("u.id");
 
       // Test that the query can be executed without errors
       const result = await query.execute();
@@ -65,8 +65,8 @@ describe("Alias Integration Tests", () => {
       expect(compiled.sql).toContain("FROM users AS u");
       expect(compiled.sql).toContain("INNER JOIN posts AS p");
       expect(compiled.sql).toContain("ON u.id = p.user_id");
-      expect(compiled.sql).toContain('"u.name"');
-      expect(compiled.sql).toContain('"p.title"');
+      expect(compiled.sql).toContain("u.name");
+      expect(compiled.sql).toContain("p.title");
 
       // Test that the query can be executed without errors
       const result = await query.execute();
@@ -124,9 +124,9 @@ describe("Alias Integration Tests", () => {
 
       expect(compiled.sql).toContain("FROM users AS u");
       expect(compiled.sql).toContain("INNER JOIN posts AS p");
-      expect(compiled.sql).toContain('"u.name"');
-      expect(compiled.sql).toContain('"p.title"');
-      expect(compiled.sql).toContain('"c.content"');
+      expect(compiled.sql).toContain("u.name");
+      expect(compiled.sql).toContain("p.title");
+      expect(compiled.sql).toContain("c.content");
 
       // Test that the query can be executed without errors
       const result = await query.execute();
@@ -145,9 +145,9 @@ describe("Alias Integration Tests", () => {
 
       expect(compiled.sql).toContain("FROM users AS u");
       expect(compiled.sql).toContain("INNER JOIN posts AS p");
-      expect(compiled.sql).toContain('"u.name"');
+      expect(compiled.sql).toContain("u.name");
       expect(compiled.sql).toContain("title");
-      expect(compiled.sql).toContain('"p.content"');
+      expect(compiled.sql).toContain("p.content");
       expect(compiled.sql).toContain("email");
 
       // Test that the query can be executed without errors
@@ -170,8 +170,8 @@ describe("Alias Integration Tests", () => {
       expect(compiled.sql).toContain("FROM users AS u1");
       expect(compiled.sql).toContain("INNER JOIN users AS u2");
       expect(compiled.sql).toContain("ON u1.id = u2.id");
-      expect(compiled.sql).toContain('"u1.name"');
-      expect(compiled.sql).toContain('"u2.email"');
+      expect(compiled.sql).toContain("u1.name");
+      expect(compiled.sql).toContain("u2.email");
 
       // Test that the query can be executed without errors
       const result = await query.execute();
@@ -191,8 +191,8 @@ describe("Alias Integration Tests", () => {
       expect(compiled.sql).toContain("FROM users AS manager");
       expect(compiled.sql).toContain("INNER JOIN users AS employee");
       expect(compiled.sql).toContain("ON manager.id = employee.id");
-      expect(compiled.sql).toContain('"manager.name"');
-      expect(compiled.sql).toContain('"employee.email"');
+      expect(compiled.sql).toContain("manager.name");
+      expect(compiled.sql).toContain("employee.email");
 
       // Test that the query can be executed without errors
       const result = await query.execute();
@@ -212,8 +212,8 @@ describe("Alias Integration Tests", () => {
 
       expect(compiled.sql).toContain("FROM users");
       expect(compiled.sql).not.toContain("AS");
-      expect(compiled.sql).toContain('"users.name"');
-      expect(compiled.sql).toContain('"users.email"');
+      expect(compiled.sql).toContain("users.name");
+      expect(compiled.sql).toContain("users.email");
 
       // Test that the query can be executed without errors
       const result = await query.execute();
@@ -234,8 +234,8 @@ describe("Alias Integration Tests", () => {
       expect(compiled.sql).toContain("INNER JOIN posts");
       expect(compiled.sql).toContain("ON users.id = posts.user_id");
       expect(compiled.sql).not.toContain("AS");
-      expect(compiled.sql).toContain('"users.name"');
-      expect(compiled.sql).toContain('"posts.title"');
+      expect(compiled.sql).toContain("users.name");
+      expect(compiled.sql).toContain("posts.title");
 
       // Test that the query can be executed without errors
       const result = await query.execute();
@@ -327,8 +327,8 @@ describe("Alias Integration Tests", () => {
 
       // Currently works
       expect(compiled.sql).toContain("FROM users AS u");
-      expect(compiled.sql).toContain('"u.name"');
-      expect(compiled.sql).toContain('"u.email"');
+      expect(compiled.sql).toContain("u.name");
+      expect(compiled.sql).toContain("u.email");
 
       // TODO: Should contain WHERE clause
       // expect(compiled.sql).toContain("WHERE (u.active = $1 OR u.name = $2)");

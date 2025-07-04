@@ -24,8 +24,12 @@ import type { Expression, SqlBool } from "../types/expression";
 import {
   createExpressionBuilder,
   createExpressionHelpers,
+  createAliasedExpressionHelpers,
+  createMultiTableAliasedExpressionHelpers,
   type ExpressionBuilder,
   type ExpressionHelpers,
+  type AliasedExpressionHelpers,
+  type MultiTableAliasedExpressionHelpers,
 } from "./expression-builder";
 
 /**
@@ -743,7 +747,7 @@ export interface AliasedSelectQueryBuilder<
   where<K extends GetColumnReferences<DB, TE>, Op extends WhereOperator, V>(
     columnOrExpression: K | RawBuilder,
     operator?: Op,
-    value?: TypeSafeWhereValue<DB, TB, K, Op, V>
+    value?: V
   ): AliasedSelectQueryBuilder<DB, TE, TB, O, TJoinContext>;
 
   /**
@@ -751,7 +755,7 @@ export interface AliasedSelectQueryBuilder<
    */
   where(
     expression: (
-      helpers: ExpressionHelpers<DB, TB>
+      helpers: AliasedExpressionHelpers<DB, TE>
     ) => Expression<SqlBool> | Expression<SqlBool>[]
   ): AliasedSelectQueryBuilder<DB, TE, TB, O, TJoinContext>;
 
@@ -900,7 +904,7 @@ export interface MultiTableAliasedSelectQueryBuilder<
   where<K extends GetColumnReferences<DB, TEs>, Op extends WhereOperator, V>(
     columnOrExpression: K | RawBuilder,
     operator?: Op,
-    value?: TypeSafeWhereValue<DB, TB, K, Op, V>
+    value?: V
   ): MultiTableAliasedSelectQueryBuilder<DB, TEs, TB, O, TJoinContext>;
 
   /**
@@ -908,7 +912,7 @@ export interface MultiTableAliasedSelectQueryBuilder<
    */
   where(
     expression: (
-      helpers: ExpressionHelpers<DB, TB>
+      helpers: MultiTableAliasedExpressionHelpers<DB, TEs>
     ) => Expression<SqlBool> | Expression<SqlBool>[]
   ): MultiTableAliasedSelectQueryBuilder<DB, TEs, TB, O, TJoinContext>;
 
@@ -1510,11 +1514,35 @@ export class AliasedSelectQueryBuilderImpl<
     const selectionNodes: SelectionNode[] = columns.map((column) => {
       const columnStr = String(column);
 
-      // Check if this is a qualified column reference (table.column)
-      if (columnStr.includes(".")) {
+      // First check if this is a column alias (contains "as")
+      if (columnStr.includes(" as ")) {
+        const { column: columnName, alias } = parseColumnExpression(columnStr);
+
+        // Check if the column part is qualified (table.column)
+        if (columnName.includes(".")) {
+          const { table, column: baseColumn } =
+            parseColumnReference(columnName);
+
+          return {
+            kind: "SelectionNode" as const,
+            expression: ExpressionNodeFactory.createReference(
+              baseColumn,
+              table || ""
+            ),
+            ...(alias && { alias }),
+          };
+        } else {
+          // Simple column with alias
+          return {
+            kind: "SelectionNode" as const,
+            expression: ExpressionNodeFactory.createReference(columnName),
+            ...(alias && { alias }),
+          };
+        }
+      } else if (columnStr.includes(".")) {
+        // Qualified column reference without alias (table.column)
         const { table, column: columnName } = parseColumnReference(columnStr);
 
-        // Create reference with table qualification
         return {
           kind: "SelectionNode" as const,
           expression: ExpressionNodeFactory.createReference(
@@ -1523,13 +1551,10 @@ export class AliasedSelectQueryBuilderImpl<
           ),
         };
       } else {
-        // Handle column aliases (column as alias) or simple column names
-        const { column: columnName, alias } = parseColumnExpression(columnStr);
-
+        // Simple column name without alias
         return {
           kind: "SelectionNode" as const,
-          expression: ExpressionNodeFactory.createReference(columnName),
-          ...(alias && { alias: alias }), // Only include alias if it exists
+          expression: ExpressionNodeFactory.createReference(columnStr),
         };
       }
     });
@@ -1571,16 +1596,16 @@ export class AliasedSelectQueryBuilderImpl<
       | K
       | RawBuilder
       | ((
-          helpers: ExpressionHelpers<DB, TB>
+          helpers: AliasedExpressionHelpers<DB, TE>
         ) => Expression<SqlBool> | Expression<SqlBool>[]),
     operator?: Op,
-    value?: TypeSafeWhereValue<DB, TB, K, Op, V>
+    value?: V
   ): AliasedSelectQueryBuilder<DB, TE, TB, O, TJoinContext> {
     let whereExpression: ExpressionNode;
 
     if (typeof columnOrExpression === "function") {
       // Expression builder callback
-      const helpers = createExpressionHelpers<DB, TB>();
+      const helpers = createAliasedExpressionHelpers<DB, TE>();
       const result = columnOrExpression(helpers);
 
       if (Array.isArray(result)) {
@@ -2042,13 +2067,50 @@ export class MultiTableAliasedSelectQueryBuilderImpl<
     // Create selection nodes for each column
     const selectionNodes: SelectionNode[] = columns.map((column) => {
       const columnStr = String(column);
-      const { column: columnName, alias } = parseColumnExpression(columnStr);
 
-      return {
-        kind: "SelectionNode" as const,
-        expression: ExpressionNodeFactory.createReference(columnName),
-        ...(alias && { alias: alias }), // Only include alias if it exists
-      };
+      // First check if this is a column alias (contains "as")
+      if (columnStr.includes(" as ")) {
+        const { column: columnName, alias } = parseColumnExpression(columnStr);
+
+        // Check if the column part is qualified (table.column)
+        if (columnName.includes(".")) {
+          const { table, column: baseColumn } =
+            parseColumnReference(columnName);
+
+          return {
+            kind: "SelectionNode" as const,
+            expression: ExpressionNodeFactory.createReference(
+              baseColumn,
+              table || ""
+            ),
+            ...(alias && { alias }),
+          };
+        } else {
+          // Simple column with alias
+          return {
+            kind: "SelectionNode" as const,
+            expression: ExpressionNodeFactory.createReference(columnName),
+            ...(alias && { alias }),
+          };
+        }
+      } else if (columnStr.includes(".")) {
+        // Qualified column reference without alias (table.column)
+        const { table, column: columnName } = parseColumnReference(columnStr);
+
+        return {
+          kind: "SelectionNode" as const,
+          expression: ExpressionNodeFactory.createReference(
+            columnName,
+            table || ""
+          ),
+        };
+      } else {
+        // Simple column name without alias
+        return {
+          kind: "SelectionNode" as const,
+          expression: ExpressionNodeFactory.createReference(columnStr),
+        };
+      }
     });
 
     // Create new query node with selections
@@ -2097,13 +2159,99 @@ export class MultiTableAliasedSelectQueryBuilderImpl<
       | K
       | RawBuilder
       | ((
-          helpers: ExpressionHelpers<DB, TB>
+          helpers: MultiTableAliasedExpressionHelpers<DB, TEs>
         ) => Expression<SqlBool> | Expression<SqlBool>[]),
     operator?: Op,
-    value?: TypeSafeWhereValue<DB, TB, K, Op, V>
+    value?: V
   ): MultiTableAliasedSelectQueryBuilder<DB, TEs, TB, O, TJoinContext> {
-    // For now, return this (implementation would be similar to original where method)
-    return this;
+    let whereExpression: ExpressionNode;
+
+    if (typeof columnOrExpression === "function") {
+      // Expression builder callback
+      const helpers = createMultiTableAliasedExpressionHelpers<DB, TEs>();
+      const result = columnOrExpression(helpers);
+
+      if (Array.isArray(result)) {
+        // Multiple expressions - combine with AND
+        whereExpression = result.reduce((acc, expr) => {
+          const exprNode = (expr as any).toOperationNode();
+          return acc
+            ? ExpressionNodeFactory.createBinaryOperation(acc, "AND", exprNode)
+            : exprNode;
+        }, null as ExpressionNode | null)!;
+      } else {
+        // Single expression
+        whereExpression = (result as any).toOperationNode();
+      }
+    } else if (
+      typeof columnOrExpression === "object" &&
+      "sql" in columnOrExpression
+    ) {
+      // Raw SQL expression
+      whereExpression = ExpressionNodeFactory.createRaw(
+        columnOrExpression.sql,
+        columnOrExpression.parameters
+      );
+    } else {
+      // Column-based where with operator and value
+      if (!operator) {
+        throw new Error(
+          "Operator is required for column-based where conditions"
+        );
+      }
+
+      // Parse qualified column reference (table.column or just column)
+      const { table, column } = parseColumnReference(
+        String(columnOrExpression)
+      );
+
+      // For multi-table queries, we need to determine the correct table reference
+      let tableReference: string | undefined = table;
+
+      if (!tableReference) {
+        // If no table specified, try to find the alias from the first table expression
+        const firstTableExpression = this.tableExpressions[0];
+        if (firstTableExpression) {
+          const { alias } = parseTableExpression(firstTableExpression);
+          tableReference = alias || String(this.tableName);
+        }
+      }
+
+      const leftOperand = ExpressionNodeFactory.createReference(
+        column,
+        tableReference
+      );
+      let rightOperand: ExpressionNode;
+
+      if (value === null) {
+        rightOperand = ExpressionNodeFactory.createNull();
+      } else if (Array.isArray(value)) {
+        rightOperand = ExpressionNodeFactory.createArrayValue(value, true);
+      } else {
+        rightOperand = ExpressionNodeFactory.createValue(value, true);
+      }
+
+      whereExpression = ExpressionNodeFactory.createBinaryOperation(
+        leftOperand,
+        operator,
+        rightOperand
+      );
+    }
+
+    const whereNode: WhereNode = {
+      kind: "WhereNode" as const,
+      expression: whereExpression,
+    };
+
+    const newNode = SelectQueryNode.cloneWithWhere(this.node, whereNode);
+
+    return new MultiTableAliasedSelectQueryBuilderImpl<
+      DB,
+      TEs,
+      TB,
+      O,
+      TJoinContext
+    >(this.tableName, this.tableExpressions, this.postgres, newNode);
   }
 
   innerJoin<JTE extends string, JTB extends keyof DB>(

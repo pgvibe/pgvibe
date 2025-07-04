@@ -30,11 +30,11 @@ async function playground() {
     console.log("  📋 SELECT id, name FROM users WHERE active = true:");
 
     const activeUsers = await db
-      .selectFrom("users")
+      .selectFrom("users as u")
       .select(["id", "name"])
       .where(({ eb, or }) => [
         or([
-          eb("active", "=", false),
+          eb("u.active", "=", false),
           eb("name", "=", "johan"),
           eb("created_at", ">", "2025-01-01"),
         ]),
