@@ -9,6 +9,7 @@ import type {
   PostTable,
   CommentTable,
   RawBuilder,
+  ExtractAliasName,
 } from "./core/shared-types";
 import {
   PostgreSQL,
@@ -17,11 +18,19 @@ import {
 import {
   createSelectQueryBuilder,
   type CreateSelectQueryBuilder,
+  createAliasedSelectQueryBuilder,
+  type CreateAliasedSelectQueryBuilder,
+  type SelectQueryBuilder,
+  type AliasedSelectQueryBuilder,
+  type MultiTableAliasedSelectQueryBuilder,
+  MultiTableAliasedSelectQueryBuilderImpl,
 } from "./core/builders/select-query-builder";
 import {
   createInsertQueryBuilder,
   type CreateInsertQueryBuilder,
+  type InsertQueryBuilder,
 } from "./core/builders/insert-query-builder";
+import { parseTableExpression } from "./core/shared-types";
 
 // Export utility types for operation-aware type system
 export type {
@@ -71,18 +80,43 @@ export class ZenQ<DB> {
 
   /**
    * Start building a SELECT query from the specified table with intelligent error messages
+   * Now supports table aliases with full type safety and proper join support
    *
-   * @param table - The table name to select from
+   * @param table - The table name to select from, optionally with alias (e.g., "users as u")
    * @returns A SelectQueryBuilder with superior error messages for invalid columns
    */
   selectFrom<TE extends TableExpression<DB>>(
     table: TE
-  ): CreateSelectQueryBuilder<DB, ExtractTableAlias<DB, TE>> {
-    // Create the query builder with intelligent error messages
-    return createSelectQueryBuilder<DB, ExtractTableAlias<DB, TE>>(
-      this.postgres,
-      table as ExtractTableAlias<DB, TE> & string
-    );
+  ): ExtractAliasName<DB, TE> extends ExtractTableAlias<DB, TE>
+    ? CreateSelectQueryBuilder<DB, ExtractTableAlias<DB, TE>>
+    : MultiTableAliasedSelectQueryBuilder<
+        DB,
+        readonly [TE],
+        ExtractTableAlias<DB, TE>,
+        any
+      > {
+    // Parse the table expression to get the actual table name and alias
+    const { table: tableName, alias } = parseTableExpression(table);
+
+    // If no alias is present, use the traditional query builder
+    if (!alias) {
+      return createSelectQueryBuilder<DB, ExtractTableAlias<DB, TE>>(
+        this.postgres,
+        tableName as ExtractTableAlias<DB, TE> & string
+      ) as any;
+    }
+
+    // If alias is present, use the multi-table alias-aware query builder
+    return new MultiTableAliasedSelectQueryBuilderImpl<
+      DB,
+      readonly [TE],
+      ExtractTableAlias<DB, TE>,
+      any
+    >(
+      tableName as ExtractTableAlias<DB, TE>,
+      [table] as readonly [TE],
+      this.postgres
+    ) as any;
   }
 
   /**
@@ -94,9 +128,12 @@ export class ZenQ<DB> {
   insertInto<TE extends TableExpression<DB>>(
     table: TE
   ): CreateInsertQueryBuilder<DB, ExtractTableAlias<DB, TE>> {
+    // Parse the table expression to get the actual table name
+    const { table: tableName } = parseTableExpression(table);
+
     return createInsertQueryBuilder<DB, ExtractTableAlias<DB, TE>>(
       this.postgres,
-      table as ExtractTableAlias<DB, TE> & string
+      tableName as ExtractTableAlias<DB, TE> & string
     );
   }
 
@@ -229,6 +266,7 @@ export type {
 export type {
   SelectQueryBuilder,
   CreateSelectQueryBuilder,
+  AliasedSelectQueryBuilder,
 } from "./core/builders/select-query-builder";
 
 export type {
