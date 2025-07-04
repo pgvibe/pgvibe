@@ -253,6 +253,10 @@ export class PostgresQueryCompiler {
    */
   private visitSelection(node: SelectionNode): void {
     this.visitNode(node.expression);
+    if (node.alias) {
+      this.append(" AS ");
+      this.appendIdentifier(node.alias);
+    }
   }
 
   /**

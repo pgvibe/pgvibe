@@ -17,6 +17,7 @@ import type {
   TypeSafeWhereValue,
   ExtractColumnType,
 } from "./select-query-builder";
+import type { GetColumnReferences } from "../shared-types";
 
 // =============================================================================
 // JSONB Type Definitions
@@ -725,6 +726,89 @@ export interface ExpressionHelpers<DB, TB extends keyof DB> {
 }
 
 /**
+ * Aliased expression helpers that work with GetColumnReferences
+ * Used for single-table aliases like "users as u"
+ */
+export interface AliasedExpressionHelpers<DB, TE extends string> {
+  /**
+   * The main expression builder instance for aliases
+   */
+  eb: AliasedExpressionBuilder<DB, TE>;
+
+  /**
+   * Combine multiple expressions with logical AND
+   */
+  and: (expressions: Expression<SqlBool>[]) => Expression<SqlBool>;
+
+  /**
+   * Combine multiple expressions with logical OR
+   */
+  or: (expressions: Expression<SqlBool>[]) => Expression<SqlBool>;
+
+  /**
+   * Create a logical NOT expression
+   */
+  not: (expression: Expression<SqlBool>) => Expression<SqlBool>;
+
+  /**
+   * Create JSONB operations with fluent API (for aliases)
+   */
+  jsonb: <K extends JsonbColumnOf<DB, any>>(
+    column: K
+  ) => JsonbExpressionBuilder<DB, any, K>;
+
+  /**
+   * Create PostgreSQL array operations with fluent API (for aliases)
+   */
+  array: <K extends ArrayColumnOf<DB, any>>(
+    column: K
+  ) => ArrayExpressionBuilder<DB, any, K>;
+}
+
+/**
+ * Multi-table aliased expression helpers that work with GetColumnReferences
+ * Used for multi-table aliases like ["users as u", "posts as p"]
+ */
+export interface MultiTableAliasedExpressionHelpers<
+  DB,
+  TEs extends readonly string[]
+> {
+  /**
+   * The main expression builder instance for multi-table aliases
+   */
+  eb: MultiTableAliasedExpressionBuilder<DB, TEs>;
+
+  /**
+   * Combine multiple expressions with logical AND
+   */
+  and: (expressions: Expression<SqlBool>[]) => Expression<SqlBool>;
+
+  /**
+   * Combine multiple expressions with logical OR
+   */
+  or: (expressions: Expression<SqlBool>[]) => Expression<SqlBool>;
+
+  /**
+   * Create a logical NOT expression
+   */
+  not: (expression: Expression<SqlBool>) => Expression<SqlBool>;
+
+  /**
+   * Create JSONB operations with fluent API (for multi-table aliases)
+   */
+  jsonb: <K extends JsonbColumnOf<DB, any>>(
+    column: K
+  ) => JsonbExpressionBuilder<DB, any, K>;
+
+  /**
+   * Create PostgreSQL array operations with fluent API (for multi-table aliases)
+   */
+  array: <K extends ArrayColumnOf<DB, any>>(
+    column: K
+  ) => ArrayExpressionBuilder<DB, any, K>;
+}
+
+/**
  * Interface for building SQL expressions with logical operators
  *
  * This interface provides methods for creating binary expressions (column comparisons)
@@ -774,6 +858,69 @@ export interface ExpressionBuilder<DB, TB extends keyof DB> {
    *
    * @param expression - The boolean expression to negate
    * @returns Expression that evaluates to boolean
+   */
+  not(expression: Expression<SqlBool>): Expression<SqlBool>;
+}
+
+/**
+ * Aliased expression builder that works with GetColumnReferences
+ * Used for single-table aliases like "users as u"
+ */
+export interface AliasedExpressionBuilder<DB, TE extends string> {
+  /**
+   * Create a binary expression for column comparison with alias support
+   */
+  <K extends GetColumnReferences<DB, TE>, Op extends WhereOperator, V>(
+    column: K,
+    operator: Op,
+    value: V
+  ): Expression<SqlBool>;
+
+  /**
+   * Combine multiple expressions with logical AND
+   */
+  and(expressions: Expression<SqlBool>[]): Expression<SqlBool>;
+
+  /**
+   * Combine multiple expressions with logical OR
+   */
+  or(expressions: Expression<SqlBool>[]): Expression<SqlBool>;
+
+  /**
+   * Create a logical NOT expression
+   */
+  not(expression: Expression<SqlBool>): Expression<SqlBool>;
+}
+
+/**
+ * Multi-table aliased expression builder that works with GetColumnReferences
+ * Used for multi-table aliases like ["users as u", "posts as p"]
+ */
+export interface MultiTableAliasedExpressionBuilder<
+  DB,
+  TEs extends readonly string[]
+> {
+  /**
+   * Create a binary expression for column comparison with multi-table alias support
+   */
+  <K extends GetColumnReferences<DB, TEs>, Op extends WhereOperator, V>(
+    column: K,
+    operator: Op,
+    value: V
+  ): Expression<SqlBool>;
+
+  /**
+   * Combine multiple expressions with logical AND
+   */
+  and(expressions: Expression<SqlBool>[]): Expression<SqlBool>;
+
+  /**
+   * Combine multiple expressions with logical OR
+   */
+  or(expressions: Expression<SqlBool>[]): Expression<SqlBool>;
+
+  /**
+   * Create a logical NOT expression
    */
   not(expression: Expression<SqlBool>): Expression<SqlBool>;
 }
@@ -915,38 +1062,132 @@ function combineExpressions(
  * Implementation of the ExpressionBuilder interface
  */
 export class ExpressionBuilderImpl<DB, TB extends keyof DB> {
-  /**
-   * Binary expression creation
-   */
+  constructor() {}
+
   call<K extends ColumnReference<DB, TB>, Op extends WhereOperator, V>(
     column: K,
     operator: Op,
     value: TypeSafeWhereValue<DB, TB, K, Op, V>
   ): Expression<SqlBool> {
-    return createBinaryExpression<DB, TB, K, Op, V>(column, operator, value);
+    return createBinaryExpression(column, operator, value);
   }
 
-  /**
-   * Combine expressions with AND
-   */
   and(expressions: Expression<SqlBool>[]): Expression<SqlBool> {
     return combineExpressions(expressions, "AND");
   }
 
-  /**
-   * Combine expressions with OR
-   */
   or(expressions: Expression<SqlBool>[]): Expression<SqlBool> {
     return combineExpressions(expressions, "OR");
   }
 
-  /**
-   * Create NOT expression
-   */
   not(expression: Expression<SqlBool>): Expression<SqlBool> {
-    const operandNode = expression.toOperationNode();
-    const notNode = ExpressionNodeFactory.createNotOperation(operandNode);
-    return new ExpressionImpl<SqlBool>(notNode);
+    return new ExpressionImpl(
+      ExpressionNodeFactory.createNotOperation(expression.toOperationNode())
+    );
+  }
+}
+
+/**
+ * Create a binary operation expression for aliased columns (simplified type safety)
+ */
+function createAliasedBinaryExpression<
+  K extends string,
+  Op extends WhereOperator,
+  V
+>(column: K, operator: Op, value: V): Expression<SqlBool> {
+  // Parse column reference
+  const columnStr = column as string;
+  const parts = columnStr.includes(".")
+    ? columnStr.split(".")
+    : [undefined, columnStr];
+  const [table, columnName] =
+    parts.length === 2 ? [parts[0], parts[1]] : [undefined, parts[0]];
+
+  // Create column reference node
+  const columnNode = ExpressionNodeFactory.createReference(columnName!, table);
+
+  // Create value node - handle arrays, null, and regular values
+  let valueNode: ExpressionNode;
+  if (value === null) {
+    valueNode = ExpressionNodeFactory.createNull();
+  } else if (Array.isArray(value)) {
+    // Handle arrays for IN/NOT IN operators
+    valueNode = ExpressionNodeFactory.createArrayValue(value, true);
+  } else {
+    valueNode = ExpressionNodeFactory.createValue(value, true);
+  }
+
+  // Create binary operation
+  const binaryNode = ExpressionNodeFactory.createBinaryOperation(
+    columnNode,
+    operator,
+    valueNode
+  );
+
+  // Return expression implementation instance
+  return new ExpressionImpl<SqlBool>(binaryNode);
+}
+
+/**
+ * Implementation of the aliased expression builder
+ */
+export class AliasedExpressionBuilderImpl<DB, TE extends string> {
+  constructor() {}
+
+  call<K extends GetColumnReferences<DB, TE>, Op extends WhereOperator, V>(
+    column: K,
+    operator: Op,
+    value: V
+  ): Expression<SqlBool> {
+    // Create a binary expression using the aliased column
+    return createAliasedBinaryExpression(column, operator, value);
+  }
+
+  and(expressions: Expression<SqlBool>[]): Expression<SqlBool> {
+    return combineExpressions(expressions, "AND");
+  }
+
+  or(expressions: Expression<SqlBool>[]): Expression<SqlBool> {
+    return combineExpressions(expressions, "OR");
+  }
+
+  not(expression: Expression<SqlBool>): Expression<SqlBool> {
+    return new ExpressionImpl(
+      ExpressionNodeFactory.createNotOperation(expression.toOperationNode())
+    );
+  }
+}
+
+/**
+ * Implementation of the multi-table aliased expression builder
+ */
+export class MultiTableAliasedExpressionBuilderImpl<
+  DB,
+  TEs extends readonly string[]
+> {
+  constructor() {}
+
+  call<K extends GetColumnReferences<DB, TEs>, Op extends WhereOperator, V>(
+    column: K,
+    operator: Op,
+    value: V
+  ): Expression<SqlBool> {
+    // Create a binary expression using the multi-table aliased column
+    return createAliasedBinaryExpression(column, operator, value);
+  }
+
+  and(expressions: Expression<SqlBool>[]): Expression<SqlBool> {
+    return combineExpressions(expressions, "AND");
+  }
+
+  or(expressions: Expression<SqlBool>[]): Expression<SqlBool> {
+    return combineExpressions(expressions, "OR");
+  }
+
+  not(expression: Expression<SqlBool>): Expression<SqlBool> {
+    return new ExpressionImpl(
+      ExpressionNodeFactory.createNotOperation(expression.toOperationNode())
+    );
   }
 }
 
@@ -1010,5 +1251,87 @@ export function createExpressionHelpers<
   return {
     eb,
     ...helpers,
+  };
+}
+
+/**
+ * Create an aliased expression builder for single-table aliases
+ */
+export function createAliasedExpressionBuilder<
+  DB,
+  TE extends string
+>(): AliasedExpressionBuilder<DB, TE> {
+  const builderImpl = new AliasedExpressionBuilderImpl<DB, TE>();
+
+  const callableBuilder = function <
+    K extends GetColumnReferences<DB, TE>,
+    Op extends WhereOperator,
+    V
+  >(column: K, operator: Op, value: V): Expression<SqlBool> {
+    return builderImpl.call(column, operator, value);
+  };
+
+  // Add methods to the callable function
+  callableBuilder.and = builderImpl.and.bind(builderImpl);
+  callableBuilder.or = builderImpl.or.bind(builderImpl);
+  callableBuilder.not = builderImpl.not.bind(builderImpl);
+
+  return callableBuilder as AliasedExpressionBuilder<DB, TE>;
+}
+
+/**
+ * Create a multi-table aliased expression builder
+ */
+export function createMultiTableAliasedExpressionBuilder<
+  DB,
+  TEs extends readonly string[]
+>(): MultiTableAliasedExpressionBuilder<DB, TEs> {
+  const builderImpl = new MultiTableAliasedExpressionBuilderImpl<DB, TEs>();
+
+  const callableBuilder = function <
+    K extends GetColumnReferences<DB, TEs>,
+    Op extends WhereOperator,
+    V
+  >(column: K, operator: Op, value: V): Expression<SqlBool> {
+    return builderImpl.call(column, operator, value);
+  };
+
+  // Add methods to the callable function
+  callableBuilder.and = builderImpl.and.bind(builderImpl);
+  callableBuilder.or = builderImpl.or.bind(builderImpl);
+  callableBuilder.not = builderImpl.not.bind(builderImpl);
+
+  return callableBuilder as MultiTableAliasedExpressionBuilder<DB, TEs>;
+}
+
+/**
+ * Create aliased expression helpers for single-table aliases
+ */
+export function createAliasedExpressionHelpers<
+  DB,
+  TE extends string
+>(): AliasedExpressionHelpers<DB, TE> {
+  const eb = createAliasedExpressionBuilder<DB, TE>();
+  const standaloneHelpers = createStandaloneHelpers(eb as any);
+
+  return {
+    eb,
+    ...standaloneHelpers,
+  };
+}
+
+/**
+ * Create multi-table aliased expression helpers
+ */
+export function createMultiTableAliasedExpressionHelpers<
+  DB,
+  TEs extends readonly string[]
+>(): MultiTableAliasedExpressionHelpers<DB, TEs> {
+  const eb = createMultiTableAliasedExpressionBuilder<DB, TEs>();
+  const standaloneHelpers = createStandaloneHelpers(eb as any);
+
+  return {
+    eb,
+    ...standaloneHelpers,
   };
 }

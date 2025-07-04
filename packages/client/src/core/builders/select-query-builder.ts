@@ -10,10 +10,13 @@ import type {
   ExpressionNode,
   JoinNode,
   OnNode,
+  OrderByNode,
+  OrderByItemNode,
 } from "../ast/select-query-node";
 import { ExpressionNodeFactory } from "../ast/expression-nodes";
 import type { PostgreSQL } from "../postgres/postgres-dialect";
-import type { RawBuilder } from "../shared-types";
+import type { RawBuilder, GetColumnReferences } from "../shared-types";
+import { parseColumnExpression, parseTableExpression } from "../shared-types";
 import type { SelectResult, SelectAllResult } from "../types/select-result";
 import type { Prettify } from "../types/select-result";
 import type { ValidateColumnAccess } from "../errors/validation-utils";
@@ -21,8 +24,12 @@ import type { Expression, SqlBool } from "../types/expression";
 import {
   createExpressionBuilder,
   createExpressionHelpers,
+  createAliasedExpressionHelpers,
+  createMultiTableAliasedExpressionHelpers,
   type ExpressionBuilder,
   type ExpressionHelpers,
+  type AliasedExpressionHelpers,
+  type MultiTableAliasedExpressionHelpers,
 } from "./expression-builder";
 
 /**
@@ -522,22 +529,21 @@ export type SimpleUnambiguousColumns<DB, TB extends keyof DB> =
     : AllColumnsFromTables<DB, TB>; // Fallback to all columns
 
 /**
- * Parse a column reference to extract table and column parts
- * Handles both simple column names and qualified table.column references
+ * Parse column reference to extract table and column parts
+ * Handles both qualified (table.column) and unqualified (column) references
  */
-export function parseColumnReference(columnRef: string): {
+function parseColumnReference(columnRef: string): {
   table?: string;
   column: string;
 } {
-  const parts = columnRef.split(".");
-  if (parts.length === 2) {
-    return {
-      table: parts[0]!,
-      column: parts[1]!,
-    };
+  const dotIndex = columnRef.indexOf(".");
+  if (dotIndex === -1) {
+    return { column: columnRef };
   }
+
   return {
-    column: columnRef,
+    table: columnRef.substring(0, dotIndex),
+    column: columnRef.substring(dotIndex + 1),
   };
 }
 
@@ -691,6 +697,324 @@ export interface SelectQueryBuilder<
 
   /**
    * Execute the query (placeholder for now)
+   */
+  execute(): Promise<O[]>;
+}
+
+/**
+ * Alias-aware SelectQueryBuilder interface that supports table aliases
+ * This interface tracks the original table expression to enable alias support
+ */
+export interface AliasedSelectQueryBuilder<
+  DB,
+  TE extends string,
+  TB extends keyof DB,
+  O,
+  TJoinContext extends JoinContext = readonly []
+> {
+  /**
+   * Add columns to the SELECT clause with alias support
+   * Supports both simple column names and qualified alias names
+   */
+  select<
+    K extends
+      | readonly GetColumnReferences<DB, TE>[]
+      | GetColumnReferences<DB, TE>
+  >(
+    columnsOrColumn: K
+  ): AliasedSelectQueryBuilder<
+    DB,
+    TE,
+    TB,
+    SelectResult<DB, TB, K, TJoinContext>,
+    TJoinContext
+  >;
+
+  /**
+   * Select all columns from the table
+   */
+  selectAll(): AliasedSelectQueryBuilder<
+    DB,
+    TE,
+    TB,
+    SelectResult<DB, TB, AllColumnsAsArray<DB, TB>, TJoinContext>,
+    TJoinContext
+  >;
+
+  /**
+   * Type-safe WHERE method with alias support
+   */
+  where<K extends GetColumnReferences<DB, TE>, Op extends WhereOperator, V>(
+    columnOrExpression: K | RawBuilder,
+    operator?: Op,
+    value?: V
+  ): AliasedSelectQueryBuilder<DB, TE, TB, O, TJoinContext>;
+
+  /**
+   * WHERE method with expression builder callback
+   */
+  where(
+    expression: (
+      helpers: AliasedExpressionHelpers<DB, TE>
+    ) => Expression<SqlBool> | Expression<SqlBool>[]
+  ): AliasedSelectQueryBuilder<DB, TE, TB, O, TJoinContext>;
+
+  /**
+   * Add INNER JOIN clause with alias support
+   */
+  innerJoin<JTE extends string, JTB extends keyof DB>(
+    table: JTE,
+    onColumn1: GetColumnReferences<DB, TE>,
+    onColumn2: GetColumnReferences<DB, JTE>
+  ): AliasedSelectQueryBuilder<
+    DB,
+    TE,
+    JoinedTables<DB, TB, JTB>,
+    O,
+    readonly [...TJoinContext, { table: JTB & string; joinType: "INNER" }]
+  >;
+
+  /**
+   * Add LEFT JOIN clause with alias support
+   */
+  leftJoin<JTE extends string, JTB extends keyof DB>(
+    table: JTE,
+    onColumn1: GetColumnReferences<DB, TE>,
+    onColumn2: GetColumnReferences<DB, JTE>
+  ): AliasedSelectQueryBuilder<
+    DB,
+    TE,
+    JoinedTables<DB, TB, JTB>,
+    O,
+    readonly [...TJoinContext, { table: JTB & string; joinType: "LEFT" }]
+  >;
+
+  /**
+   * Add RIGHT JOIN clause with alias support
+   */
+  rightJoin<JTE extends string, JTB extends keyof DB>(
+    table: JTE,
+    onColumn1: GetColumnReferences<DB, TE>,
+    onColumn2: GetColumnReferences<DB, JTE>
+  ): AliasedSelectQueryBuilder<
+    DB,
+    TE,
+    JoinedTables<DB, TB, JTB>,
+    O,
+    readonly [...TJoinContext, { table: JTB & string; joinType: "RIGHT" }]
+  >;
+
+  /**
+   * Add FULL JOIN clause with alias support
+   */
+  fullJoin<JTE extends string, JTB extends keyof DB>(
+    table: JTE,
+    onColumn1: GetColumnReferences<DB, TE>,
+    onColumn2: GetColumnReferences<DB, JTE>
+  ): AliasedSelectQueryBuilder<
+    DB,
+    TE,
+    JoinedTables<DB, TB, JTB>,
+    O,
+    readonly [...TJoinContext, { table: JTB & string; joinType: "FULL" }]
+  >;
+
+  /**
+   * Add ORDER BY clause with alias support
+   */
+  orderBy<K extends GetColumnReferences<DB, TE>>(
+    columnOrColumns: K | Array<{ column: K; direction?: "asc" | "desc" }>,
+    direction?: "asc" | "desc"
+  ): AliasedSelectQueryBuilder<DB, TE, TB, O, TJoinContext>;
+
+  /**
+   * Add LIMIT clause
+   */
+  limit(count: number): AliasedSelectQueryBuilder<DB, TE, TB, O, TJoinContext>;
+
+  /**
+   * Add OFFSET clause
+   */
+  offset(count: number): AliasedSelectQueryBuilder<DB, TE, TB, O, TJoinContext>;
+
+  /**
+   * Convert to AST node for compilation
+   */
+  toOperationNode(): SelectQueryNode;
+
+  /**
+   * Compile to SQL with parameters
+   */
+  compile(): { sql: string; parameters: any[] };
+
+  /**
+   * Get compiled SQL for inspection
+   */
+  toSQL(): { sql: string; parameters: any[] };
+
+  /**
+   * Execute the query
+   */
+  execute(): Promise<O[]>;
+}
+
+/**
+ * Multi-table alias-aware SelectQueryBuilder interface that supports joins with multiple table aliases
+ * This interface tracks multiple table expressions to enable proper alias support across joins
+ */
+export interface MultiTableAliasedSelectQueryBuilder<
+  DB,
+  TEs extends readonly string[], // Array of table expressions
+  TB extends keyof DB,
+  O,
+  TJoinContext extends JoinContext = readonly []
+> {
+  /**
+   * Add columns to the SELECT clause with multi-table alias support
+   * Supports columns from all joined tables
+   */
+  select<
+    K extends
+      | readonly GetColumnReferences<DB, TEs>[]
+      | GetColumnReferences<DB, TEs>
+  >(
+    columnsOrColumn: K
+  ): MultiTableAliasedSelectQueryBuilder<
+    DB,
+    TEs,
+    TB,
+    SelectResult<DB, TB, K, TJoinContext>,
+    TJoinContext
+  >;
+
+  /**
+   * Select all columns from all tables
+   */
+  selectAll(): MultiTableAliasedSelectQueryBuilder<
+    DB,
+    TEs,
+    TB,
+    SelectResult<DB, TB, AllColumnsAsArray<DB, TB>, TJoinContext>,
+    TJoinContext
+  >;
+
+  /**
+   * Type-safe WHERE method with multi-table alias support
+   */
+  where<K extends GetColumnReferences<DB, TEs>, Op extends WhereOperator, V>(
+    columnOrExpression: K | RawBuilder,
+    operator?: Op,
+    value?: V
+  ): MultiTableAliasedSelectQueryBuilder<DB, TEs, TB, O, TJoinContext>;
+
+  /**
+   * WHERE method with expression builder callback
+   */
+  where(
+    expression: (
+      helpers: MultiTableAliasedExpressionHelpers<DB, TEs>
+    ) => Expression<SqlBool> | Expression<SqlBool>[]
+  ): MultiTableAliasedSelectQueryBuilder<DB, TEs, TB, O, TJoinContext>;
+
+  /**
+   * Add INNER JOIN clause with multi-table alias support
+   */
+  innerJoin<JTE extends string, JTB extends keyof DB>(
+    table: JTE,
+    onColumn1: GetColumnReferences<DB, TEs>,
+    onColumn2: GetColumnReferences<DB, readonly [JTE]>
+  ): MultiTableAliasedSelectQueryBuilder<
+    DB,
+    readonly [...TEs, JTE], // Add new table expression to the list
+    JoinedTables<DB, TB, JTB>,
+    O,
+    readonly [...TJoinContext, { table: JTB & string; joinType: "INNER" }]
+  >;
+
+  /**
+   * Add LEFT JOIN clause with multi-table alias support
+   */
+  leftJoin<JTE extends string, JTB extends keyof DB>(
+    table: JTE,
+    onColumn1: GetColumnReferences<DB, TEs>,
+    onColumn2: GetColumnReferences<DB, readonly [JTE]>
+  ): MultiTableAliasedSelectQueryBuilder<
+    DB,
+    readonly [...TEs, JTE],
+    JoinedTables<DB, TB, JTB>,
+    O,
+    readonly [...TJoinContext, { table: JTB & string; joinType: "LEFT" }]
+  >;
+
+  /**
+   * Add RIGHT JOIN clause with multi-table alias support
+   */
+  rightJoin<JTE extends string, JTB extends keyof DB>(
+    table: JTE,
+    onColumn1: GetColumnReferences<DB, TEs>,
+    onColumn2: GetColumnReferences<DB, readonly [JTE]>
+  ): MultiTableAliasedSelectQueryBuilder<
+    DB,
+    readonly [...TEs, JTE],
+    JoinedTables<DB, TB, JTB>,
+    O,
+    readonly [...TJoinContext, { table: JTB & string; joinType: "RIGHT" }]
+  >;
+
+  /**
+   * Add FULL JOIN clause with multi-table alias support
+   */
+  fullJoin<JTE extends string, JTB extends keyof DB>(
+    table: JTE,
+    onColumn1: GetColumnReferences<DB, TEs>,
+    onColumn2: GetColumnReferences<DB, readonly [JTE]>
+  ): MultiTableAliasedSelectQueryBuilder<
+    DB,
+    readonly [...TEs, JTE],
+    JoinedTables<DB, TB, JTB>,
+    O,
+    readonly [...TJoinContext, { table: JTB & string; joinType: "FULL" }]
+  >;
+
+  /**
+   * Add ORDER BY clause with multi-table alias support
+   */
+  orderBy<K extends GetColumnReferences<DB, TEs>>(
+    columnOrColumns: K | Array<{ column: K; direction?: "asc" | "desc" }>,
+    direction?: "asc" | "desc"
+  ): MultiTableAliasedSelectQueryBuilder<DB, TEs, TB, O, TJoinContext>;
+
+  /**
+   * Add LIMIT clause
+   */
+  limit(
+    count: number
+  ): MultiTableAliasedSelectQueryBuilder<DB, TEs, TB, O, TJoinContext>;
+
+  /**
+   * Add OFFSET clause
+   */
+  offset(
+    count: number
+  ): MultiTableAliasedSelectQueryBuilder<DB, TEs, TB, O, TJoinContext>;
+
+  /**
+   * Convert to AST node for compilation
+   */
+  toOperationNode(): SelectQueryNode;
+
+  /**
+   * Compile to SQL with parameters
+   */
+  compile(): { sql: string; parameters: any[] };
+
+  /**
+   * Get compiled SQL for inspection
+   */
+  toSQL(): { sql: string; parameters: any[] };
+
+  /**
+   * Execute the query
    */
   execute(): Promise<O[]>;
 }
@@ -1138,4 +1462,1233 @@ export function createSelectQueryBuilder<DB, TB extends keyof DB>(
   table: TB & string
 ): CreateSelectQueryBuilder<DB, TB> {
   return new SelectQueryBuilderImpl<DB, TB, DB[TB]>(table, postgres);
+}
+
+/**
+ * Alias-aware SelectQueryBuilder implementation
+ */
+export class AliasedSelectQueryBuilderImpl<
+  DB,
+  TE extends string,
+  TB extends keyof DB,
+  O,
+  TJoinContext extends JoinContext = readonly []
+> implements AliasedSelectQueryBuilder<DB, TE, TB, O, TJoinContext>
+{
+  private node: SelectQueryNode;
+  private tableName: TB;
+  private tableExpression: TE;
+  private postgres: PostgreSQL;
+
+  constructor(
+    tableName: TB,
+    tableExpression: TE,
+    postgres: PostgreSQL,
+    node: SelectQueryNode = SelectQueryNode.create()
+  ) {
+    this.tableName = tableName;
+    this.tableExpression = tableExpression;
+    this.postgres = postgres;
+    this.node = node;
+  }
+
+  select<
+    K extends
+      | readonly GetColumnReferences<DB, TE>[]
+      | GetColumnReferences<DB, TE>
+  >(
+    columnsOrColumn: K
+  ): AliasedSelectQueryBuilder<
+    DB,
+    TE,
+    TB,
+    SelectResult<DB, TB, K, TJoinContext>,
+    TJoinContext
+  > {
+    // Handle both single column and array of columns
+    const columns = Array.isArray(columnsOrColumn)
+      ? columnsOrColumn
+      : [columnsOrColumn];
+
+    // Create selection nodes for each column
+    const selectionNodes: SelectionNode[] = columns.map((column) => {
+      const columnStr = String(column);
+
+      // First check if this is a column alias (contains "as")
+      if (columnStr.includes(" as ")) {
+        const { column: columnName, alias } = parseColumnExpression(columnStr);
+
+        // Check if the column part is qualified (table.column)
+        if (columnName.includes(".")) {
+          const { table, column: baseColumn } =
+            parseColumnReference(columnName);
+
+          return {
+            kind: "SelectionNode" as const,
+            expression: ExpressionNodeFactory.createReference(
+              baseColumn,
+              table || ""
+            ),
+            ...(alias && { alias }),
+          };
+        } else {
+          // Simple column with alias
+          return {
+            kind: "SelectionNode" as const,
+            expression: ExpressionNodeFactory.createReference(columnName),
+            ...(alias && { alias }),
+          };
+        }
+      } else if (columnStr.includes(".")) {
+        // Qualified column reference without alias (table.column)
+        const { table, column: columnName } = parseColumnReference(columnStr);
+
+        return {
+          kind: "SelectionNode" as const,
+          expression: ExpressionNodeFactory.createReference(
+            columnName,
+            table || ""
+          ),
+        };
+      } else {
+        // Simple column name without alias
+        return {
+          kind: "SelectionNode" as const,
+          expression: ExpressionNodeFactory.createReference(columnStr),
+        };
+      }
+    });
+
+    // Create new query node with selections
+    const newNode = SelectQueryNode.cloneWithSelection(
+      this.node,
+      selectionNodes
+    );
+
+    return new AliasedSelectQueryBuilderImpl<
+      DB,
+      TE,
+      TB,
+      SelectResult<DB, TB, K, TJoinContext>,
+      TJoinContext
+    >(this.tableName, this.tableExpression, this.postgres, newNode);
+  }
+
+  selectAll(): AliasedSelectQueryBuilder<
+    DB,
+    TE,
+    TB,
+    SelectResult<DB, TB, AllColumnsAsArray<DB, TB>, TJoinContext>,
+    TJoinContext
+  > {
+    // For now, return a simple implementation
+    return new AliasedSelectQueryBuilderImpl<
+      DB,
+      TE,
+      TB,
+      SelectResult<DB, TB, AllColumnsAsArray<DB, TB>, TJoinContext>,
+      TJoinContext
+    >(this.tableName, this.tableExpression, this.postgres, this.node);
+  }
+
+  where<K extends GetColumnReferences<DB, TE>, Op extends WhereOperator, V>(
+    columnOrExpression:
+      | K
+      | RawBuilder
+      | ((
+          helpers: AliasedExpressionHelpers<DB, TE>
+        ) => Expression<SqlBool> | Expression<SqlBool>[]),
+    operator?: Op,
+    value?: V
+  ): AliasedSelectQueryBuilder<DB, TE, TB, O, TJoinContext> {
+    let whereExpression: ExpressionNode;
+
+    if (typeof columnOrExpression === "function") {
+      // Expression builder callback
+      const helpers = createAliasedExpressionHelpers<DB, TE>();
+      const result = columnOrExpression(helpers);
+
+      if (Array.isArray(result)) {
+        // Multiple expressions - combine with AND
+        whereExpression = result.reduce((acc, expr) => {
+          const exprNode = (expr as any).toOperationNode();
+          return acc
+            ? ExpressionNodeFactory.createBinaryOperation(acc, "AND", exprNode)
+            : exprNode;
+        }, null as ExpressionNode | null)!;
+      } else {
+        // Single expression
+        whereExpression = (result as any).toOperationNode();
+      }
+    } else if (
+      typeof columnOrExpression === "object" &&
+      "sql" in columnOrExpression
+    ) {
+      // Raw SQL expression
+      whereExpression = ExpressionNodeFactory.createRaw(
+        columnOrExpression.sql,
+        columnOrExpression.parameters
+      );
+    } else {
+      // Column-based where with operator and value
+      if (!operator) {
+        throw new Error(
+          "Operator is required for column-based where conditions"
+        );
+      }
+
+      // Parse qualified column reference (table.column or just column)
+      const { table, column } = parseColumnReference(
+        String(columnOrExpression)
+      );
+
+      // Use alias if available, otherwise use the parsed table or original table name
+      const tableReference =
+        table ||
+        this.extractAliasFromTableExpression(this.tableExpression) ||
+        String(this.tableName);
+
+      const leftOperand = ExpressionNodeFactory.createReference(
+        column,
+        tableReference
+      );
+      let rightOperand: ExpressionNode;
+
+      if (value === null) {
+        rightOperand = ExpressionNodeFactory.createNull();
+      } else if (Array.isArray(value)) {
+        rightOperand = ExpressionNodeFactory.createArrayValue(value, true);
+      } else {
+        rightOperand = ExpressionNodeFactory.createValue(value, true);
+      }
+
+      whereExpression = ExpressionNodeFactory.createBinaryOperation(
+        leftOperand,
+        operator,
+        rightOperand
+      );
+    }
+
+    const whereNode: WhereNode = {
+      kind: "WhereNode" as const,
+      expression: whereExpression,
+    };
+
+    const newNode = SelectQueryNode.cloneWithWhere(this.node, whereNode);
+
+    return new AliasedSelectQueryBuilderImpl<DB, TE, TB, O, TJoinContext>(
+      this.tableName,
+      this.tableExpression,
+      this.postgres,
+      newNode
+    );
+  }
+
+  innerJoin<JTE extends string, JTB extends keyof DB>(
+    table: JTE,
+    onColumn1: GetColumnReferences<DB, TE>,
+    onColumn2: GetColumnReferences<DB, JTE>
+  ): AliasedSelectQueryBuilder<
+    DB,
+    TE,
+    JoinedTables<DB, TB, JTB>,
+    O,
+    readonly [...TJoinContext, { table: JTB & string; joinType: "INNER" }]
+  > {
+    return this.createAliasedJoin("INNER JOIN", table, onColumn1, onColumn2);
+  }
+
+  leftJoin<JTE extends string, JTB extends keyof DB>(
+    table: JTE,
+    onColumn1: GetColumnReferences<DB, TE>,
+    onColumn2: GetColumnReferences<DB, JTE>
+  ): AliasedSelectQueryBuilder<
+    DB,
+    TE,
+    JoinedTables<DB, TB, JTB>,
+    O,
+    readonly [...TJoinContext, { table: JTB & string; joinType: "LEFT" }]
+  > {
+    return this.createAliasedJoin("LEFT JOIN", table, onColumn1, onColumn2);
+  }
+
+  rightJoin<JTE extends string, JTB extends keyof DB>(
+    table: JTE,
+    onColumn1: GetColumnReferences<DB, TE>,
+    onColumn2: GetColumnReferences<DB, JTE>
+  ): AliasedSelectQueryBuilder<
+    DB,
+    TE,
+    JoinedTables<DB, TB, JTB>,
+    O,
+    readonly [...TJoinContext, { table: JTB & string; joinType: "RIGHT" }]
+  > {
+    return this.createAliasedJoin("RIGHT JOIN", table, onColumn1, onColumn2);
+  }
+
+  fullJoin<JTE extends string, JTB extends keyof DB>(
+    table: JTE,
+    onColumn1: GetColumnReferences<DB, TE>,
+    onColumn2: GetColumnReferences<DB, JTE>
+  ): AliasedSelectQueryBuilder<
+    DB,
+    TE,
+    JoinedTables<DB, TB, JTB>,
+    O,
+    readonly [...TJoinContext, { table: JTB & string; joinType: "FULL" }]
+  > {
+    return this.createAliasedJoin("FULL JOIN", table, onColumn1, onColumn2);
+  }
+
+  /**
+   * Private helper method to create JOIN operations for aliased query builders
+   */
+  private createAliasedJoin<JTE extends string, JTB extends keyof DB>(
+    joinType: "INNER JOIN" | "LEFT JOIN" | "RIGHT JOIN" | "FULL JOIN",
+    table: JTE,
+    onColumn1: GetColumnReferences<DB, TE>,
+    onColumn2: GetColumnReferences<DB, JTE>
+  ): AliasedSelectQueryBuilder<
+    DB,
+    TE,
+    JoinedTables<DB, TB, JTB>,
+    O,
+    readonly [...TJoinContext, { table: JTB & string; joinType: any }]
+  > {
+    // Parse the joined table expression to get table name and alias
+    const { table: joinedTableName, alias: joinedAlias } =
+      parseTableExpression(table);
+
+    // Create table reference node for the joined table
+    const tableRef: TableReferenceNode = {
+      kind: "TableReferenceNode" as const,
+      table: joinedTableName,
+      ...(joinedAlias && { alias: joinedAlias }),
+    };
+
+    // Parse qualified column references properly
+    const { table: leftTable, column: leftColumn } = parseColumnReference(
+      String(onColumn1)
+    );
+    const { table: rightTable, column: rightColumn } = parseColumnReference(
+      String(onColumn2)
+    );
+
+    // Create column references with proper table qualification
+    const leftReference = ExpressionNodeFactory.createReference(
+      leftColumn,
+      leftTable ||
+        this.extractAliasFromTableExpression(this.tableExpression) ||
+        String(this.tableName) ||
+        undefined
+    );
+    const rightReference = ExpressionNodeFactory.createReference(
+      rightColumn,
+      rightTable || joinedAlias || joinedTableName || undefined
+    );
+
+    const onExpression = ExpressionNodeFactory.createBinaryOperation(
+      leftReference,
+      "=",
+      rightReference
+    );
+
+    const onNode: OnNode = {
+      kind: "OnNode" as const,
+      expression: onExpression,
+    };
+
+    // Create JOIN node
+    const joinNode: JoinNode = {
+      kind: "JoinNode" as const,
+      joinType,
+      table: tableRef,
+      on: onNode,
+    };
+
+    // Clone the query node with the new JOIN
+    const newNode = SelectQueryNode.cloneWithJoin(this.node, joinNode);
+
+    return new AliasedSelectQueryBuilderImpl<
+      DB,
+      TE,
+      JoinedTables<DB, TB, JTB>,
+      O,
+      readonly [...TJoinContext, { table: JTB & string; joinType: any }]
+    >(this.tableName, this.tableExpression, this.postgres, newNode);
+  }
+
+  /**
+   * Helper method to extract alias from table expression
+   */
+  private extractAliasFromTableExpression(
+    tableExpression: string
+  ): string | undefined {
+    const { alias } = parseTableExpression(tableExpression);
+    return alias;
+  }
+
+  orderBy<K extends GetColumnReferences<DB, TE>>(
+    columnOrColumns: K | Array<{ column: K; direction?: "asc" | "desc" }>,
+    direction?: "asc" | "desc"
+  ): AliasedSelectQueryBuilder<DB, TE, TB, O, TJoinContext> {
+    // Handle both single column and array of columns
+    const columns = Array.isArray(columnOrColumns)
+      ? columnOrColumns
+      : [{ column: columnOrColumns, direction }];
+
+    // Create order by items
+    const orderByItems: OrderByItemNode[] = columns.map((item) => {
+      const column = typeof item === "string" ? item : item.column;
+      const dir = typeof item === "string" ? direction : item.direction;
+
+      const { table: columnTable, column: columnName } = parseColumnReference(
+        String(column)
+      );
+
+      const expression = ExpressionNodeFactory.createReference(
+        columnName,
+        columnTable ||
+          this.extractAliasFromTableExpression(this.tableExpression) ||
+          String(this.tableName) ||
+          undefined
+      );
+
+      return {
+        kind: "OrderByItemNode" as const,
+        expression,
+        direction: (dir?.toUpperCase() as "ASC" | "DESC") || "ASC",
+      };
+    });
+
+    const orderByNode: OrderByNode = {
+      kind: "OrderByNode" as const,
+      items: orderByItems,
+    };
+
+    const newNode = SelectQueryNode.cloneWithOrderBy(this.node, orderByNode);
+
+    return new AliasedSelectQueryBuilderImpl<DB, TE, TB, O, TJoinContext>(
+      this.tableName,
+      this.tableExpression,
+      this.postgres,
+      newNode
+    );
+  }
+
+  limit(count: number): AliasedSelectQueryBuilder<DB, TE, TB, O, TJoinContext> {
+    const limitNode: import("../ast/select-query-node").LimitNode = {
+      kind: "LimitNode" as const,
+      limit: count,
+    };
+
+    const newNode = SelectQueryNode.cloneWithLimit(this.node, limitNode);
+
+    return new AliasedSelectQueryBuilderImpl<DB, TE, TB, O, TJoinContext>(
+      this.tableName,
+      this.tableExpression,
+      this.postgres,
+      newNode
+    );
+  }
+
+  offset(
+    count: number
+  ): AliasedSelectQueryBuilder<DB, TE, TB, O, TJoinContext> {
+    const offsetNode: import("../ast/select-query-node").OffsetNode = {
+      kind: "OffsetNode" as const,
+      offset: count,
+    };
+
+    const newNode = SelectQueryNode.cloneWithOffset(this.node, offsetNode);
+
+    return new AliasedSelectQueryBuilderImpl<DB, TE, TB, O, TJoinContext>(
+      this.tableName,
+      this.tableExpression,
+      this.postgres,
+      newNode
+    );
+  }
+
+  toOperationNode(): SelectQueryNode {
+    // Ensure we have a FROM clause with alias support
+    if (!this.node.from) {
+      // Parse the table expression to get table name and alias
+      const { table, alias } = parseTableExpression(this.tableExpression);
+
+      const tableRef: TableReferenceNode = {
+        kind: "TableReferenceNode" as const,
+        table: table,
+        ...(alias && { alias: alias }), // Only include alias if it exists
+      };
+
+      const fromNode: FromNode = {
+        kind: "FromNode" as const,
+        table: tableRef,
+      };
+
+      return SelectQueryNode.cloneWithFrom(this.node, fromNode);
+    }
+
+    return this.node;
+  }
+
+  compile(): { sql: string; parameters: any[] } {
+    // Get the complete AST node with FROM clause including alias
+    const operationNode = this.toOperationNode();
+
+    // Use PostgreSQL query compiler to compile the AST
+    const compiler = this.postgres.getQueryCompiler();
+    const compiled = compiler.compileQuery(operationNode);
+
+    return {
+      sql: compiled.sql,
+      parameters: [...compiled.parameters] as any[],
+    };
+  }
+
+  toSQL(): { sql: string; parameters: any[] } {
+    return this.compile();
+  }
+
+  async execute(): Promise<O[]> {
+    const { sql, parameters } = this.compile();
+    console.log("Executing:", sql, "with parameters:", parameters);
+
+    // Get the driver from PostgreSQL and execute the query
+    const driver = this.postgres.getDriver();
+    const adapter = this.postgres.getAdapter();
+
+    try {
+      // Initialize the driver first
+      await driver.init();
+
+      // Acquire a connection from the driver
+      const connection = await driver.acquireConnection();
+
+      try {
+        // Create a compiled query object
+        const compiledQuery = {
+          sql,
+          parameters,
+          query: this.toOperationNode(),
+        };
+
+        // Execute the query through the connection
+        const result = await connection.executeQuery(compiledQuery);
+
+        // Transform and return the results
+        return result.rows as O[];
+      } finally {
+        // Always release the connection back to the pool
+        await driver.releaseConnection(connection);
+      }
+    } catch (error) {
+      throw error; // Re-throw database errors
+    }
+  }
+}
+
+/**
+ * Type alias for creating alias-aware query builders
+ */
+export type CreateAliasedSelectQueryBuilder<
+  DB,
+  TE extends string,
+  TB extends keyof DB
+> = AliasedSelectQueryBuilder<DB, TE, TB, Prettify<DB[TB]>>;
+
+/**
+ * Factory function to create alias-aware query builders
+ */
+export function createAliasedSelectQueryBuilder<
+  DB,
+  TE extends string,
+  TB extends keyof DB
+>(
+  postgres: PostgreSQL,
+  tableName: TB & string,
+  tableExpression: TE
+): CreateAliasedSelectQueryBuilder<DB, TE, TB> {
+  return new AliasedSelectQueryBuilderImpl<DB, TE, TB, Prettify<DB[TB]>>(
+    tableName as TB,
+    tableExpression,
+    postgres
+  );
+}
+
+/**
+ * Multi-table alias-aware SelectQueryBuilder implementation
+ * Handles joins with multiple table aliases properly
+ */
+export class MultiTableAliasedSelectQueryBuilderImpl<
+  DB,
+  TEs extends readonly string[],
+  TB extends keyof DB,
+  O,
+  TJoinContext extends JoinContext = readonly []
+> implements MultiTableAliasedSelectQueryBuilder<DB, TEs, TB, O, TJoinContext>
+{
+  private node: SelectQueryNode;
+  private tableName: TB;
+  private tableExpressions: TEs;
+  private postgres: PostgreSQL;
+
+  constructor(
+    tableName: TB,
+    tableExpressions: TEs,
+    postgres: PostgreSQL,
+    node: SelectQueryNode = SelectQueryNode.create()
+  ) {
+    this.tableName = tableName;
+    this.tableExpressions = tableExpressions;
+    this.postgres = postgres;
+    this.node = node;
+  }
+
+  select<
+    K extends
+      | readonly GetColumnReferences<DB, TEs>[]
+      | GetColumnReferences<DB, TEs>
+  >(
+    columnsOrColumn: K
+  ): MultiTableAliasedSelectQueryBuilder<
+    DB,
+    TEs,
+    TB,
+    SelectResult<DB, TB, K, TJoinContext>,
+    TJoinContext
+  > {
+    // Handle both single column and array of columns
+    const columns = Array.isArray(columnsOrColumn)
+      ? columnsOrColumn
+      : [columnsOrColumn];
+
+    // Create selection nodes for each column
+    const selectionNodes: SelectionNode[] = columns.map((column) => {
+      const columnStr = String(column);
+
+      // First check if this is a column alias (contains "as")
+      if (columnStr.includes(" as ")) {
+        const { column: columnName, alias } = parseColumnExpression(columnStr);
+
+        // Check if the column part is qualified (table.column)
+        if (columnName.includes(".")) {
+          const { table, column: baseColumn } =
+            parseColumnReference(columnName);
+
+          return {
+            kind: "SelectionNode" as const,
+            expression: ExpressionNodeFactory.createReference(
+              baseColumn,
+              table || ""
+            ),
+            ...(alias && { alias }),
+          };
+        } else {
+          // Simple column with alias
+          return {
+            kind: "SelectionNode" as const,
+            expression: ExpressionNodeFactory.createReference(columnName),
+            ...(alias && { alias }),
+          };
+        }
+      } else if (columnStr.includes(".")) {
+        // Qualified column reference without alias (table.column)
+        const { table, column: columnName } = parseColumnReference(columnStr);
+
+        return {
+          kind: "SelectionNode" as const,
+          expression: ExpressionNodeFactory.createReference(
+            columnName,
+            table || ""
+          ),
+        };
+      } else {
+        // Simple column name without alias
+        return {
+          kind: "SelectionNode" as const,
+          expression: ExpressionNodeFactory.createReference(columnStr),
+        };
+      }
+    });
+
+    // Create new query node with selections
+    const newNode = SelectQueryNode.cloneWithSelection(
+      this.node,
+      selectionNodes
+    );
+
+    return new MultiTableAliasedSelectQueryBuilderImpl<
+      DB,
+      TEs,
+      TB,
+      SelectResult<DB, TB, K, TJoinContext>,
+      TJoinContext
+    >(this.tableName, this.tableExpressions, this.postgres, newNode);
+  }
+
+  selectAll(): MultiTableAliasedSelectQueryBuilder<
+    DB,
+    TEs,
+    TB,
+    SelectResult<DB, TB, AllColumnsAsArray<DB, TB>, TJoinContext>,
+    TJoinContext
+  > {
+    // For selectAll, we'll use a special star selection with raw SQL
+    const starSelection: SelectionNode = {
+      kind: "SelectionNode" as const,
+      expression: ExpressionNodeFactory.createRaw("*"),
+    };
+
+    const newNode = SelectQueryNode.cloneWithSelection(this.node, [
+      starSelection,
+    ]);
+
+    return new MultiTableAliasedSelectQueryBuilderImpl<
+      DB,
+      TEs,
+      TB,
+      SelectResult<DB, TB, AllColumnsAsArray<DB, TB>, TJoinContext>,
+      TJoinContext
+    >(this.tableName, this.tableExpressions, this.postgres, newNode);
+  }
+
+  where<K extends GetColumnReferences<DB, TEs>, Op extends WhereOperator, V>(
+    columnOrExpression:
+      | K
+      | RawBuilder
+      | ((
+          helpers: MultiTableAliasedExpressionHelpers<DB, TEs>
+        ) => Expression<SqlBool> | Expression<SqlBool>[]),
+    operator?: Op,
+    value?: V
+  ): MultiTableAliasedSelectQueryBuilder<DB, TEs, TB, O, TJoinContext> {
+    let whereExpression: ExpressionNode;
+
+    if (typeof columnOrExpression === "function") {
+      // Expression builder callback
+      const helpers = createMultiTableAliasedExpressionHelpers<DB, TEs>();
+      const result = columnOrExpression(helpers);
+
+      if (Array.isArray(result)) {
+        // Multiple expressions - combine with AND
+        whereExpression = result.reduce((acc, expr) => {
+          const exprNode = (expr as any).toOperationNode();
+          return acc
+            ? ExpressionNodeFactory.createBinaryOperation(acc, "AND", exprNode)
+            : exprNode;
+        }, null as ExpressionNode | null)!;
+      } else {
+        // Single expression
+        whereExpression = (result as any).toOperationNode();
+      }
+    } else if (
+      typeof columnOrExpression === "object" &&
+      "sql" in columnOrExpression
+    ) {
+      // Raw SQL expression
+      whereExpression = ExpressionNodeFactory.createRaw(
+        columnOrExpression.sql,
+        columnOrExpression.parameters
+      );
+    } else {
+      // Column-based where with operator and value
+      if (!operator) {
+        throw new Error(
+          "Operator is required for column-based where conditions"
+        );
+      }
+
+      // Parse qualified column reference (table.column or just column)
+      const { table, column } = parseColumnReference(
+        String(columnOrExpression)
+      );
+
+      // For multi-table queries, we need to determine the correct table reference
+      let tableReference: string | undefined = table;
+
+      if (!tableReference) {
+        // If no table specified, try to find the alias from the first table expression
+        const firstTableExpression = this.tableExpressions[0];
+        if (firstTableExpression) {
+          const { alias } = parseTableExpression(firstTableExpression);
+          tableReference = alias || String(this.tableName);
+        }
+      }
+
+      const leftOperand = ExpressionNodeFactory.createReference(
+        column,
+        tableReference
+      );
+      let rightOperand: ExpressionNode;
+
+      if (value === null) {
+        rightOperand = ExpressionNodeFactory.createNull();
+      } else if (Array.isArray(value)) {
+        rightOperand = ExpressionNodeFactory.createArrayValue(value, true);
+      } else {
+        rightOperand = ExpressionNodeFactory.createValue(value, true);
+      }
+
+      whereExpression = ExpressionNodeFactory.createBinaryOperation(
+        leftOperand,
+        operator,
+        rightOperand
+      );
+    }
+
+    const whereNode: WhereNode = {
+      kind: "WhereNode" as const,
+      expression: whereExpression,
+    };
+
+    const newNode = SelectQueryNode.cloneWithWhere(this.node, whereNode);
+
+    return new MultiTableAliasedSelectQueryBuilderImpl<
+      DB,
+      TEs,
+      TB,
+      O,
+      TJoinContext
+    >(this.tableName, this.tableExpressions, this.postgres, newNode);
+  }
+
+  innerJoin<JTE extends string, JTB extends keyof DB>(
+    table: JTE,
+    onColumn1: GetColumnReferences<DB, TEs>,
+    onColumn2: GetColumnReferences<DB, readonly [JTE]>
+  ): MultiTableAliasedSelectQueryBuilder<
+    DB,
+    readonly [...TEs, JTE],
+    JoinedTables<DB, TB, JTB>,
+    O,
+    readonly [...TJoinContext, { table: JTB & string; joinType: "INNER" }]
+  > {
+    const newTableExpressions = [...this.tableExpressions, table] as const;
+
+    // Parse the join table expression
+    const { table: joinTableName, alias: joinAlias } =
+      parseTableExpression(table);
+
+    // Create table reference node with alias
+    const tableRef: TableReferenceNode = {
+      kind: "TableReferenceNode" as const,
+      table: joinTableName,
+      ...(joinAlias && { alias: joinAlias }),
+    };
+
+    // Parse column references for the ON clause
+    const { table: leftTable, column: leftColumn } = parseColumnReference(
+      String(onColumn1)
+    );
+    const { table: rightTable, column: rightColumn } = parseColumnReference(
+      String(onColumn2)
+    );
+
+    // Create column references with proper table qualification
+    const leftReference = ExpressionNodeFactory.createReference(
+      leftColumn,
+      leftTable || ""
+    );
+    const rightReference = ExpressionNodeFactory.createReference(
+      rightColumn,
+      rightTable || joinAlias || joinTableName
+    );
+
+    const onExpression = ExpressionNodeFactory.createBinaryOperation(
+      leftReference,
+      "=",
+      rightReference
+    );
+
+    const onNode: OnNode = {
+      kind: "OnNode" as const,
+      expression: onExpression,
+    };
+
+    // Create JOIN node
+    const joinNode: JoinNode = {
+      kind: "JoinNode" as const,
+      joinType: "INNER JOIN",
+      table: tableRef,
+      on: onNode,
+    };
+
+    // Clone the query node with the new JOIN
+    const newNode = SelectQueryNode.cloneWithJoin(this.node, joinNode);
+
+    return new MultiTableAliasedSelectQueryBuilderImpl<
+      DB,
+      readonly [...TEs, JTE],
+      JoinedTables<DB, TB, JTB>,
+      O,
+      readonly [...TJoinContext, { table: JTB & string; joinType: "INNER" }]
+    >(this.tableName, newTableExpressions, this.postgres, newNode);
+  }
+
+  leftJoin<JTE extends string, JTB extends keyof DB>(
+    table: JTE,
+    onColumn1: GetColumnReferences<DB, TEs>,
+    onColumn2: GetColumnReferences<DB, readonly [JTE]>
+  ): MultiTableAliasedSelectQueryBuilder<
+    DB,
+    readonly [...TEs, JTE],
+    JoinedTables<DB, TB, JTB>,
+    O,
+    readonly [...TJoinContext, { table: JTB & string; joinType: "LEFT" }]
+  > {
+    const newTableExpressions = [...this.tableExpressions, table] as const;
+
+    // Parse the join table expression
+    const { table: joinTableName, alias: joinAlias } =
+      parseTableExpression(table);
+
+    // Create table reference node with alias
+    const tableRef: TableReferenceNode = {
+      kind: "TableReferenceNode" as const,
+      table: joinTableName,
+      ...(joinAlias && { alias: joinAlias }),
+    };
+
+    // Parse column references for the ON clause
+    const { table: leftTable, column: leftColumn } = parseColumnReference(
+      String(onColumn1)
+    );
+    const { table: rightTable, column: rightColumn } = parseColumnReference(
+      String(onColumn2)
+    );
+
+    // Create column references with proper table qualification
+    const leftReference = ExpressionNodeFactory.createReference(
+      leftColumn,
+      leftTable || ""
+    );
+    const rightReference = ExpressionNodeFactory.createReference(
+      rightColumn,
+      rightTable || joinAlias || joinTableName
+    );
+
+    const onExpression = ExpressionNodeFactory.createBinaryOperation(
+      leftReference,
+      "=",
+      rightReference
+    );
+
+    const onNode: OnNode = {
+      kind: "OnNode" as const,
+      expression: onExpression,
+    };
+
+    // Create JOIN node
+    const joinNode: JoinNode = {
+      kind: "JoinNode" as const,
+      joinType: "LEFT JOIN",
+      table: tableRef,
+      on: onNode,
+    };
+
+    // Clone the query node with the new JOIN
+    const newNode = SelectQueryNode.cloneWithJoin(this.node, joinNode);
+
+    return new MultiTableAliasedSelectQueryBuilderImpl<
+      DB,
+      readonly [...TEs, JTE],
+      JoinedTables<DB, TB, JTB>,
+      O,
+      readonly [...TJoinContext, { table: JTB & string; joinType: "LEFT" }]
+    >(this.tableName, newTableExpressions, this.postgres, newNode);
+  }
+
+  rightJoin<JTE extends string, JTB extends keyof DB>(
+    table: JTE,
+    onColumn1: GetColumnReferences<DB, TEs>,
+    onColumn2: GetColumnReferences<DB, readonly [JTE]>
+  ): MultiTableAliasedSelectQueryBuilder<
+    DB,
+    readonly [...TEs, JTE],
+    JoinedTables<DB, TB, JTB>,
+    O,
+    readonly [...TJoinContext, { table: JTB & string; joinType: "RIGHT" }]
+  > {
+    const newTableExpressions = [...this.tableExpressions, table] as const;
+
+    // Parse the join table expression
+    const { table: joinTableName, alias: joinAlias } =
+      parseTableExpression(table);
+
+    // Create table reference node with alias
+    const tableRef: TableReferenceNode = {
+      kind: "TableReferenceNode" as const,
+      table: joinTableName,
+      ...(joinAlias && { alias: joinAlias }),
+    };
+
+    // Parse column references for the ON clause
+    const { table: leftTable, column: leftColumn } = parseColumnReference(
+      String(onColumn1)
+    );
+    const { table: rightTable, column: rightColumn } = parseColumnReference(
+      String(onColumn2)
+    );
+
+    // Create column references with proper table qualification
+    const leftReference = ExpressionNodeFactory.createReference(
+      leftColumn,
+      leftTable || ""
+    );
+    const rightReference = ExpressionNodeFactory.createReference(
+      rightColumn,
+      rightTable || joinAlias || joinTableName
+    );
+
+    const onExpression = ExpressionNodeFactory.createBinaryOperation(
+      leftReference,
+      "=",
+      rightReference
+    );
+
+    const onNode: OnNode = {
+      kind: "OnNode" as const,
+      expression: onExpression,
+    };
+
+    // Create JOIN node
+    const joinNode: JoinNode = {
+      kind: "JoinNode" as const,
+      joinType: "RIGHT JOIN",
+      table: tableRef,
+      on: onNode,
+    };
+
+    // Clone the query node with the new JOIN
+    const newNode = SelectQueryNode.cloneWithJoin(this.node, joinNode);
+
+    return new MultiTableAliasedSelectQueryBuilderImpl<
+      DB,
+      readonly [...TEs, JTE],
+      JoinedTables<DB, TB, JTB>,
+      O,
+      readonly [...TJoinContext, { table: JTB & string; joinType: "RIGHT" }]
+    >(this.tableName, newTableExpressions, this.postgres, newNode);
+  }
+
+  fullJoin<JTE extends string, JTB extends keyof DB>(
+    table: JTE,
+    onColumn1: GetColumnReferences<DB, TEs>,
+    onColumn2: GetColumnReferences<DB, readonly [JTE]>
+  ): MultiTableAliasedSelectQueryBuilder<
+    DB,
+    readonly [...TEs, JTE],
+    JoinedTables<DB, TB, JTB>,
+    O,
+    readonly [...TJoinContext, { table: JTB & string; joinType: "FULL" }]
+  > {
+    const newTableExpressions = [...this.tableExpressions, table] as const;
+
+    // Parse the join table expression
+    const { table: joinTableName, alias: joinAlias } =
+      parseTableExpression(table);
+
+    // Create table reference node with alias
+    const tableRef: TableReferenceNode = {
+      kind: "TableReferenceNode" as const,
+      table: joinTableName,
+      ...(joinAlias && { alias: joinAlias }),
+    };
+
+    // Parse column references for the ON clause
+    const { table: leftTable, column: leftColumn } = parseColumnReference(
+      String(onColumn1)
+    );
+    const { table: rightTable, column: rightColumn } = parseColumnReference(
+      String(onColumn2)
+    );
+
+    // Create column references with proper table qualification
+    const leftReference = ExpressionNodeFactory.createReference(
+      leftColumn,
+      leftTable || ""
+    );
+    const rightReference = ExpressionNodeFactory.createReference(
+      rightColumn,
+      rightTable || joinAlias || joinTableName
+    );
+
+    const onExpression = ExpressionNodeFactory.createBinaryOperation(
+      leftReference,
+      "=",
+      rightReference
+    );
+
+    const onNode: OnNode = {
+      kind: "OnNode" as const,
+      expression: onExpression,
+    };
+
+    // Create JOIN node
+    const joinNode: JoinNode = {
+      kind: "JoinNode" as const,
+      joinType: "FULL JOIN",
+      table: tableRef,
+      on: onNode,
+    };
+
+    // Clone the query node with the new JOIN
+    const newNode = SelectQueryNode.cloneWithJoin(this.node, joinNode);
+
+    return new MultiTableAliasedSelectQueryBuilderImpl<
+      DB,
+      readonly [...TEs, JTE],
+      JoinedTables<DB, TB, JTB>,
+      O,
+      readonly [...TJoinContext, { table: JTB & string; joinType: "FULL" }]
+    >(this.tableName, newTableExpressions, this.postgres, newNode);
+  }
+
+  orderBy<K extends GetColumnReferences<DB, TEs>>(
+    columnOrColumns: K | Array<{ column: K; direction?: "asc" | "desc" }>,
+    direction?: "asc" | "desc"
+  ): MultiTableAliasedSelectQueryBuilder<DB, TEs, TB, O, TJoinContext> {
+    // Handle both single column and array of columns
+    const columns = Array.isArray(columnOrColumns)
+      ? columnOrColumns
+      : [{ column: columnOrColumns, direction }];
+
+    // Create order by items
+    const orderByItems: OrderByItemNode[] = columns.map((item) => {
+      const column = typeof item === "string" ? item : item.column;
+      const dir = typeof item === "string" ? direction : item.direction;
+
+      const { table: columnTable, column: columnName } = parseColumnReference(
+        String(column)
+      );
+
+      const expression = ExpressionNodeFactory.createReference(
+        columnName,
+        columnTable || ""
+      );
+
+      return {
+        kind: "OrderByItemNode" as const,
+        expression,
+        direction: (dir?.toUpperCase() as "ASC" | "DESC") || "ASC",
+      };
+    });
+
+    const orderByNode: OrderByNode = {
+      kind: "OrderByNode" as const,
+      items: orderByItems,
+    };
+
+    const newNode = SelectQueryNode.cloneWithOrderBy(this.node, orderByNode);
+
+    return new MultiTableAliasedSelectQueryBuilderImpl<
+      DB,
+      TEs,
+      TB,
+      O,
+      TJoinContext
+    >(this.tableName, this.tableExpressions, this.postgres, newNode);
+  }
+
+  limit(
+    count: number
+  ): MultiTableAliasedSelectQueryBuilder<DB, TEs, TB, O, TJoinContext> {
+    const limitNode: import("../ast/select-query-node").LimitNode = {
+      kind: "LimitNode" as const,
+      limit: count,
+    };
+
+    const newNode = SelectQueryNode.cloneWithLimit(this.node, limitNode);
+
+    return new MultiTableAliasedSelectQueryBuilderImpl<
+      DB,
+      TEs,
+      TB,
+      O,
+      TJoinContext
+    >(this.tableName, this.tableExpressions, this.postgres, newNode);
+  }
+
+  offset(
+    count: number
+  ): MultiTableAliasedSelectQueryBuilder<DB, TEs, TB, O, TJoinContext> {
+    const offsetNode: import("../ast/select-query-node").OffsetNode = {
+      kind: "OffsetNode" as const,
+      offset: count,
+    };
+
+    const newNode = SelectQueryNode.cloneWithOffset(this.node, offsetNode);
+
+    return new MultiTableAliasedSelectQueryBuilderImpl<
+      DB,
+      TEs,
+      TB,
+      O,
+      TJoinContext
+    >(this.tableName, this.tableExpressions, this.postgres, newNode);
+  }
+
+  toOperationNode(): SelectQueryNode {
+    // Ensure we have a FROM clause with alias support
+    if (!this.node.from && this.tableExpressions.length > 0) {
+      // Parse the first table expression (the main table)
+      const firstTableExpression = this.tableExpressions[0];
+      if (!firstTableExpression) {
+        return this.node; // No table expressions available
+      }
+      const { table, alias } = parseTableExpression(firstTableExpression);
+
+      const tableRef: TableReferenceNode = {
+        kind: "TableReferenceNode" as const,
+        table: table,
+        ...(alias && { alias: alias }),
+      };
+
+      const fromNode: FromNode = {
+        kind: "FromNode" as const,
+        table: tableRef,
+      };
+
+      return SelectQueryNode.cloneWithFrom(this.node, fromNode);
+    }
+
+    return this.node;
+  }
+
+  compile(): { sql: string; parameters: any[] } {
+    const operationNode = this.toOperationNode();
+    const compiler = this.postgres.getQueryCompiler();
+    const compiled = compiler.compileQuery(operationNode);
+
+    return {
+      sql: compiled.sql,
+      parameters: [...compiled.parameters] as any[],
+    };
+  }
+
+  toSQL(): { sql: string; parameters: any[] } {
+    return this.compile();
+  }
+
+  async execute(): Promise<O[]> {
+    const driver = this.postgres.getDriver();
+
+    // Ensure driver is initialized
+    await driver.init();
+
+    const connection = await driver.acquireConnection();
+
+    try {
+      const operationNode = this.toOperationNode();
+      const compiler = this.postgres.getQueryCompiler();
+      const compiledQuery = compiler.compileQuery(operationNode);
+
+      const result = await connection.executeQuery(compiledQuery);
+      return result.rows as O[];
+    } finally {
+      connection.release();
+    }
+  }
 }
