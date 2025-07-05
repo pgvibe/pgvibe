@@ -9,6 +9,7 @@ import type {
   DuplicatePropertyError,
   ColumnValidationError,
 } from "./column-errors";
+import type { ExtractGenerated } from "../types/utility-types";
 
 /**
  * Extract table name from qualified column reference (e.g., "users.id" -> "users")
@@ -163,6 +164,7 @@ export type DetectDuplicateProperties<TColumns extends readonly string[]> =
  * Resolve the actual database column type for a given column reference
  * Handles both simple and qualified column names
  * Fixed to handle single table case correctly
+ * Now properly unwraps Generated<> types for SELECT operations
  */
 export type ResolveColumnType<
   TDatabase,
@@ -172,13 +174,15 @@ export type ResolveColumnType<
   ? // Qualified column: "table.column"
     ExtractTableName<TColumn> extends TTables & keyof TDatabase
     ? ExtractColumnName<TColumn> extends keyof TDatabase[ExtractTableName<TColumn>]
-      ? TDatabase[ExtractTableName<TColumn>][ExtractColumnName<TColumn>]
+      ? ExtractGenerated<
+          TDatabase[ExtractTableName<TColumn>][ExtractColumnName<TColumn>]
+        >
       : never
     : never
   : // Simple column name - handle single vs multiple tables
   TTables extends keyof TDatabase
   ? TColumn extends keyof TDatabase[TTables]
-    ? TDatabase[TTables][TColumn]
+    ? ExtractGenerated<TDatabase[TTables][TColumn]>
     : never
   : never;
 

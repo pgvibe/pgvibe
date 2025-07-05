@@ -17,7 +17,25 @@ import type {
   TypeSafeWhereValue,
   ExtractColumnType,
 } from "./select-query-builder";
-import type { GetColumnReferences } from "../shared-types";
+import type { GetColumnReferences, ExtractTableName } from "../shared-types";
+/**
+ * Runtime helper to parse qualified column names
+ * Extracts the simple column name from "table.column" or "alias.column"
+ */
+function parseQualifiedColumnName(columnName: string): {
+  table?: string;
+  column: string;
+} {
+  const dotIndex = columnName.indexOf(".");
+  if (dotIndex === -1) {
+    return { column: columnName };
+  }
+
+  return {
+    table: columnName.substring(0, dotIndex),
+    column: columnName.substring(dotIndex + 1),
+  };
+}
 
 // =============================================================================
 // JSONB Type Definitions
@@ -418,23 +436,19 @@ function createFluentJsonbBuilder<
 }
 
 /**
- * Create a fluent Array expression builder
+ * Create a fluent Array expression builder with proper qualified column parsing
  */
 function createArrayExpressionBuilder<
   DB,
   TB extends keyof DB,
   K extends ArrayColumnOf<DB, TB>
 >(column: K): ArrayExpressionBuilder<DB, TB, K> {
-  // Parse column reference to create ReferenceNode
+  // Parse qualified column reference using the unified parser
   const columnStr = column as string;
-  const parts = columnStr.includes(".")
-    ? columnStr.split(".")
-    : [undefined, columnStr];
-  const [table, columnName] =
-    parts.length === 2 ? [parts[0], parts[1]] : [undefined, parts[0]];
+  const { table, column: columnName } = parseQualifiedColumnName(columnStr);
 
   // Create column reference node
-  const columnNode = ExpressionNodeFactory.createReference(columnName!, table);
+  const columnNode = ExpressionNodeFactory.createReference(columnName, table);
 
   return new ArrayExpressionBuilder(columnNode);
 }
@@ -753,16 +767,17 @@ export interface AliasedExpressionHelpers<DB, TE extends string> {
   /**
    * Create JSONB operations with fluent API (for aliases)
    */
-  jsonb: <K extends JsonbColumnOf<DB, any>>(
+  jsonb: <K extends JsonbColumnOf<DB, ExtractTableName<DB, TE>>>(
     column: K
-  ) => JsonbExpressionBuilder<DB, any, K>;
+  ) => JsonbExpressionBuilder<DB, ExtractTableName<DB, TE>, K>;
 
   /**
    * Create PostgreSQL array operations with fluent API (for aliases)
+   * Supports both simple column names ("tags") and qualified names ("u.tags")
    */
-  array: <K extends ArrayColumnOf<DB, any>>(
+  array: <K extends GetColumnReferences<DB, TE>>(
     column: K
-  ) => ArrayExpressionBuilder<DB, any, K>;
+  ) => ArrayExpressionBuilder<DB, ExtractTableName<DB, TE>, any>;
 }
 
 /**
@@ -802,10 +817,11 @@ export interface MultiTableAliasedExpressionHelpers<
 
   /**
    * Create PostgreSQL array operations with fluent API (for multi-table aliases)
+   * Supports both simple column names ("tags") and qualified names ("u.tags")
    */
-  array: <K extends ArrayColumnOf<DB, any>>(
+  array: <K extends GetColumnReferences<DB, TEs>>(
     column: K
-  ) => ArrayExpressionBuilder<DB, any, K>;
+  ) => ArrayExpressionBuilder<DB, any, any>;
 }
 
 /**
@@ -952,16 +968,12 @@ function createBinaryExpression<
   operator: Op,
   value: TypeSafeWhereValue<DB, TB, K, Op, V>
 ): Expression<SqlBool> {
-  // Parse column reference
+  // Parse column reference using unified parser
   const columnStr = column as string;
-  const parts = columnStr.includes(".")
-    ? columnStr.split(".")
-    : [undefined, columnStr];
-  const [table, columnName] =
-    parts.length === 2 ? [parts[0], parts[1]] : [undefined, parts[0]];
+  const { table, column: columnName } = parseQualifiedColumnName(columnStr);
 
   // Create column reference node
-  const columnNode = ExpressionNodeFactory.createReference(columnName!, table);
+  const columnNode = ExpressionNodeFactory.createReference(columnName, table);
 
   // Create value node - handle arrays, null, and regular values
   let valueNode: ExpressionNode;
@@ -1095,16 +1107,12 @@ function createAliasedBinaryExpression<
   Op extends WhereOperator,
   V
 >(column: K, operator: Op, value: V): Expression<SqlBool> {
-  // Parse column reference
+  // Parse column reference using unified parser
   const columnStr = column as string;
-  const parts = columnStr.includes(".")
-    ? columnStr.split(".")
-    : [undefined, columnStr];
-  const [table, columnName] =
-    parts.length === 2 ? [parts[0], parts[1]] : [undefined, parts[0]];
+  const { table, column: columnName } = parseQualifiedColumnName(columnStr);
 
   // Create column reference node
-  const columnNode = ExpressionNodeFactory.createReference(columnName!, table);
+  const columnNode = ExpressionNodeFactory.createReference(columnName, table);
 
   // Create value node - handle arrays, null, and regular values
   let valueNode: ExpressionNode;
@@ -1239,6 +1247,51 @@ function createStandaloneHelpers<DB, TB extends keyof DB>(
 }
 
 /**
+ * Create standalone helper functions for aliased expressions
+ */
+function createAliasedStandaloneHelpers<DB, TE extends string>(
+  eb: AliasedExpressionBuilder<DB, TE>
+): Omit<AliasedExpressionHelpers<DB, TE>, "eb"> {
+  return {
+    and: (expressions: Expression<SqlBool>[]) => eb.and(expressions),
+    or: (expressions: Expression<SqlBool>[]) => eb.or(expressions),
+    not: (expression: Expression<SqlBool>) => eb.not(expression),
+    jsonb: <K extends JsonbColumnOf<DB, ExtractTableName<DB, TE>>>(column: K) =>
+      createFluentJsonbBuilder(column),
+    array: <K extends GetColumnReferences<DB, TE>>(column: K) => {
+      // Handle qualified column names by extracting the simple column name
+      const columnStr = String(column);
+      const { column: simpleColumn } = parseQualifiedColumnName(columnStr);
+      return createArrayExpressionBuilder(simpleColumn as any);
+    },
+  };
+}
+
+/**
+ * Create standalone helper functions for multi-table aliased expressions
+ */
+function createMultiTableAliasedStandaloneHelpers<
+  DB,
+  TEs extends readonly string[]
+>(
+  eb: MultiTableAliasedExpressionBuilder<DB, TEs>
+): Omit<MultiTableAliasedExpressionHelpers<DB, TEs>, "eb"> {
+  return {
+    and: (expressions: Expression<SqlBool>[]) => eb.and(expressions),
+    or: (expressions: Expression<SqlBool>[]) => eb.or(expressions),
+    not: (expression: Expression<SqlBool>) => eb.not(expression),
+    jsonb: <K extends JsonbColumnOf<DB, any>>(column: K) =>
+      createFluentJsonbBuilder(column),
+    array: <K extends GetColumnReferences<DB, TEs>>(column: K) => {
+      // Handle qualified column names by extracting the simple column name
+      const columnStr = String(column);
+      const { column: simpleColumn } = parseQualifiedColumnName(columnStr);
+      return createArrayExpressionBuilder(simpleColumn as any);
+    },
+  };
+}
+
+/**
  * Create expression helpers that support destructuring
  */
 export function createExpressionHelpers<
@@ -1312,7 +1365,7 @@ export function createAliasedExpressionHelpers<
   TE extends string
 >(): AliasedExpressionHelpers<DB, TE> {
   const eb = createAliasedExpressionBuilder<DB, TE>();
-  const standaloneHelpers = createStandaloneHelpers(eb as any);
+  const standaloneHelpers = createAliasedStandaloneHelpers(eb);
 
   return {
     eb,
@@ -1328,7 +1381,7 @@ export function createMultiTableAliasedExpressionHelpers<
   TEs extends readonly string[]
 >(): MultiTableAliasedExpressionHelpers<DB, TEs> {
   const eb = createMultiTableAliasedExpressionBuilder<DB, TEs>();
-  const standaloneHelpers = createStandaloneHelpers(eb as any);
+  const standaloneHelpers = createMultiTableAliasedStandaloneHelpers(eb);
 
   return {
     eb,

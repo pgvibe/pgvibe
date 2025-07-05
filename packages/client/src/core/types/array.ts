@@ -1,6 +1,8 @@
 // Array Type System
 // Provides type-safe PostgreSQL array operations following the established JSONB pattern
 
+import type { Generated } from "./utility-types";
+
 /**
  * PostgreSQL array type representation using branded types for compile-time safety
  *
@@ -49,6 +51,7 @@ export type ArrayElementType<T> = T extends ArrayType<infer U>
  *
  * This mapped type filters table columns to only those that are ArrayType or plain array types,
  * enabling the array() helper function to only accept valid array columns.
+ * Now properly handles Generated<> types.
  *
  * @template DB - The database schema type
  * @template TB - The table name(s) being queried
@@ -62,10 +65,11 @@ export type ArrayElementType<T> = T extends ArrayType<infer U>
  *     name: string;         // Not included
  *     tags: string[];       // Included (plain array)
  *     scores: ArrayType<number[]>; // Included (branded array)
+ *     categories: Generated<string[]>; // Included (Generated array)
  *   };
  * }
  *
- * ArrayColumnOf<Database, "users"> = "tags" | "scores"
+ * ArrayColumnOf<Database, "users"> = "tags" | "scores" | "categories"
  * ```
  */
 export type ArrayColumnOf<DB, TB extends keyof DB> = {
@@ -73,6 +77,10 @@ export type ArrayColumnOf<DB, TB extends keyof DB> = {
     ? K & string
     : DB[TB][K] extends readonly any[]
     ? K & string
+    : DB[TB][K] extends Generated<infer T>
+    ? T extends readonly any[]
+      ? K & string
+      : never
     : never;
 }[keyof DB[TB]];
 

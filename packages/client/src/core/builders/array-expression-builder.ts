@@ -17,6 +17,51 @@ import type {
   ValidArrayValue,
   ValidArrayElement,
 } from "../types/array";
+import type { ExtractGenerated } from "../types/utility-types";
+/**
+ * Runtime helper to parse qualified column names
+ * Extracts the simple column name from "table.column" or "alias.column"
+ */
+function parseQualifiedColumnName(columnName: string): {
+  table?: string;
+  column: string;
+} {
+  const dotIndex = columnName.indexOf(".");
+  if (dotIndex === -1) {
+    return { column: columnName };
+  }
+
+  return {
+    table: columnName.substring(0, dotIndex),
+    column: columnName.substring(dotIndex + 1),
+  };
+}
+
+/**
+ * Helper type to extract array element type handling Generated<> types
+ */
+type ExtractArrayElementType<T> = T extends ArrayType<infer U>
+  ? U extends readonly (infer E)[]
+    ? E
+    : never
+  : T extends readonly (infer E)[]
+  ? E
+  : ExtractGenerated<T> extends readonly (infer E)[]
+  ? E
+  : never;
+
+/**
+ * Helper type to extract array type handling Generated<> types
+ */
+type ExtractArrayType<T> = T extends ArrayType<infer U>
+  ? U extends readonly (infer E)[]
+    ? readonly E[]
+    : never
+  : T extends readonly (infer E)[]
+  ? readonly E[]
+  : ExtractGenerated<T> extends readonly (infer E)[]
+  ? readonly E[]
+  : never;
 
 /**
  * Array Expression Builder
@@ -66,15 +111,7 @@ export class ArrayExpressionBuilder<
    *   .execute();
    * ```
    */
-  contains(
-    values: DB[TB][K] extends ArrayType<infer U>
-      ? U extends readonly (infer E)[]
-        ? readonly E[]
-        : never
-      : DB[TB][K] extends readonly (infer E)[]
-      ? readonly E[]
-      : never
-  ): Expression<SqlBool> {
+  contains(values: ExtractArrayType<DB[TB][K]>): Expression<SqlBool> {
     return new ArrayContainmentExpression(
       this.column,
       "@>",
@@ -102,15 +139,7 @@ export class ArrayExpressionBuilder<
    *   .execute();
    * ```
    */
-  isContainedBy(
-    values: DB[TB][K] extends ArrayType<infer U>
-      ? U extends readonly (infer E)[]
-        ? readonly E[]
-        : never
-      : DB[TB][K] extends readonly (infer E)[]
-      ? readonly E[]
-      : never
-  ): Expression<SqlBool> {
+  isContainedBy(values: ExtractArrayType<DB[TB][K]>): Expression<SqlBool> {
     return new ArrayContainmentExpression(
       this.column,
       "<@",
@@ -136,15 +165,7 @@ export class ArrayExpressionBuilder<
    *   .execute();
    * ```
    */
-  overlaps(
-    values: DB[TB][K] extends ArrayType<infer U>
-      ? U extends readonly (infer E)[]
-        ? readonly E[]
-        : never
-      : DB[TB][K] extends readonly (infer E)[]
-      ? readonly E[]
-      : never
-  ): Expression<SqlBool> {
+  overlaps(values: ExtractArrayType<DB[TB][K]>): Expression<SqlBool> {
     return new ArrayOverlapExpression(
       this.column,
       ExpressionNodeFactory.createArrayValue([[...values] as unknown[]], true)
@@ -169,15 +190,7 @@ export class ArrayExpressionBuilder<
    *   .execute();
    * ```
    */
-  hasAny(
-    value: DB[TB][K] extends ArrayType<infer U>
-      ? U extends readonly (infer E)[]
-        ? E
-        : never
-      : DB[TB][K] extends readonly (infer E)[]
-      ? E
-      : never
-  ): Expression<SqlBool> {
+  hasAny(value: ExtractArrayElementType<DB[TB][K]>): Expression<SqlBool> {
     return new ArrayScalarExpression(
       ExpressionNodeFactory.createValue(value, true),
       "ANY",
@@ -203,15 +216,7 @@ export class ArrayExpressionBuilder<
    *   .execute();
    * ```
    */
-  hasAll(
-    value: DB[TB][K] extends ArrayType<infer U>
-      ? U extends readonly (infer E)[]
-        ? E
-        : never
-      : DB[TB][K] extends readonly (infer E)[]
-      ? E
-      : never
-  ): Expression<SqlBool> {
+  hasAll(value: ExtractArrayElementType<DB[TB][K]>): Expression<SqlBool> {
     return new ArrayScalarExpression(
       ExpressionNodeFactory.createValue(value, true),
       "ALL",

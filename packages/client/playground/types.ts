@@ -8,18 +8,18 @@ import type { Generated, WithDefault } from "../src/query-builder";
  * Represents users in your application
  *
  * This schema matches the actual PostgreSQL database structure from init.sql
- * and demonstrates proper use of Generated<T> and WithDefault<T> utility types
+ * and demonstrates proper use of Generated<T> and Generated<T> utility types
  */
 export interface UserTable {
   id: Generated<number>; // SERIAL PRIMARY KEY - auto-generated
   name: string; // VARCHAR(255) NOT NULL - required
   email: string | null; // VARCHAR(255) - nullable, optional in INSERT
-  active: WithDefault<boolean>; // BOOLEAN DEFAULT true - has default, optional in INSERT
-  created_at: WithDefault<Date>; // TIMESTAMP DEFAULT NOW() - has default, optional in INSERT
+  active: Generated<boolean>; // BOOLEAN DEFAULT true - has default, optional in INSERT
+  created_at: Generated<Date>; // TIMESTAMP DEFAULT NOW() - has default, optional in INSERT
   // Array columns from actual database schema
-  tags: WithDefault<string[]>; // TEXT[] DEFAULT '{}' - has default, optional in INSERT
-  permissions: WithDefault<string[]>; // TEXT[] DEFAULT '{}' - has default, optional in INSERT
-  scores: WithDefault<number[]>; // INTEGER[] DEFAULT '{}' - has default, optional in INSERT
+  tags: Generated<string[]>; // TEXT[] DEFAULT '{}' - has default, optional in INSERT
+  permissions: Generated<string[]>; // TEXT[] DEFAULT '{}' - has default, optional in INSERT
+  scores: Generated<number[]>; // INTEGER[] DEFAULT '{}' - has default, optional in INSERT
 }
 
 /**
@@ -33,11 +33,11 @@ export interface PostTable {
   user_id: number; // INTEGER NOT NULL - required foreign key
   title: string; // VARCHAR(255) NOT NULL - required
   content: string | null; // TEXT - nullable, optional in INSERT
-  published: WithDefault<boolean>; // BOOLEAN DEFAULT false - has default, optional in INSERT
-  created_at: WithDefault<Date>; // TIMESTAMP DEFAULT NOW() - has default, optional in INSERT
+  published: Generated<boolean>; // BOOLEAN DEFAULT false - has default, optional in INSERT
+  created_at: Generated<Date>; // TIMESTAMP DEFAULT NOW() - has default, optional in INSERT
   // Array columns from actual database schema
-  categories: WithDefault<string[]>; // TEXT[] DEFAULT '{}' - has default, optional in INSERT
-  ratings: WithDefault<number[]>; // INTEGER[] DEFAULT '{}' - has default, optional in INSERT
+  categories: Generated<string[]>; // TEXT[] DEFAULT '{}' - has default, optional in INSERT
+  ratings: Generated<number[]>; // INTEGER[] DEFAULT '{}' - has default, optional in INSERT
 }
 
 /**
@@ -51,7 +51,7 @@ export interface CommentTable {
   post_id: number; // INTEGER NOT NULL - required foreign key
   user_id: number; // INTEGER NOT NULL - required foreign key
   content: string; // TEXT NOT NULL - required
-  created_at: WithDefault<Date>; // TIMESTAMP DEFAULT NOW() - has default, optional in INSERT
+  created_at: Generated<Date>; // TIMESTAMP DEFAULT NOW() - has default, optional in INSERT
 }
 
 /**

@@ -47,6 +47,12 @@ async function playground() {
 
     console.log("✅ Insert with optional fields:", result2);
 
+    const results = await db
+      .selectFrom("users as u")
+      .select(["id", "name", "tags"])
+      .where(({ array }) => array("u.tigs").overlaps(["admin", "user"]))
+      .execute();
+
     // Test 3: Insert with explicit null (should work for nullable fields)
     const result3 = await db
       .insertInto("users as u")
