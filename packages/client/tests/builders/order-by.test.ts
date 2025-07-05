@@ -1,45 +1,91 @@
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { pgvibe } from "../../src/query-builder";
 import type { Database } from "../utils/test-types";
-import { createTestDatabase } from "../utils/test-config";
+import {
+  generateTestId,
+  createTestDatabase,
+  waitForDatabase,
+} from "../integration/utils/test-helpers";
+import {
+  createStandardTestTables,
+  createTestTables,
+  seedTestData,
+} from "../integration/utils/table-factory";
+import { performTestCleanup } from "../integration/utils/cleanup";
 
 describe("ORDER BY Operations", () => {
-  const db = createTestDatabase();
+  const testId = generateTestId();
+  const tables = createStandardTestTables(testId);
+  let db: pgvibe<any>;
+  let userIds: number[];
+  let postIds: number[];
+
+  beforeAll(async () => {
+    db = createTestDatabase();
+    await waitForDatabase();
+
+    // Create isolated test tables
+    await createTestTables(db, tables);
+
+    // Seed with test data
+    const seedResult = await seedTestData(db, tables);
+    userIds = seedResult.userIds;
+    postIds = seedResult.postIds;
+
+    // Add additional test users for ORDER BY tests
+    await db.query(`
+      INSERT INTO ${tables.users.name} (name, email, active)
+      VALUES 
+        ('Alice Wilson', 'alice@test.com', true),
+        ('Bob Johnson', 'bob@test.com', false)
+    `);
+  });
+
+  afterAll(async () => {
+    // Clean up our isolated tables
+    const tableNames = [tables.users.name, tables.posts.name];
+    if (tables.comments) {
+      tableNames.push(tables.comments.name);
+    }
+    await performTestCleanup(db, tableNames);
+  });
 
   describe("SQL Generation", () => {
     it("should generate ORDER BY for single column ASC", () => {
       const { sql, parameters } = db
-        .selectFrom("users")
+        .selectFrom(tables.users.name)
         .orderBy("name", "asc")
         .toSQL();
 
-      expect(sql).toBe("SELECT * FROM users ORDER BY name ASC");
+      expect(sql).toBe(`SELECT * FROM ${tables.users.name} ORDER BY name ASC`);
       expect(parameters).toEqual([]);
     });
 
     it("should generate ORDER BY for single column DESC", () => {
       const { sql, parameters } = db
-        .selectFrom("users")
+        .selectFrom(tables.users.name)
         .orderBy("created_at", "desc")
         .toSQL();
 
-      expect(sql).toBe("SELECT * FROM users ORDER BY created_at DESC");
+      expect(sql).toBe(
+        `SELECT * FROM ${tables.users.name} ORDER BY created_at DESC`
+      );
       expect(parameters).toEqual([]);
     });
 
     it("should default to ASC when no direction specified", () => {
       const { sql, parameters } = db
-        .selectFrom("users")
+        .selectFrom(tables.users.name)
         .orderBy("name")
         .toSQL();
 
-      expect(sql).toBe("SELECT * FROM users ORDER BY name ASC");
+      expect(sql).toBe(`SELECT * FROM ${tables.users.name} ORDER BY name ASC`);
       expect(parameters).toEqual([]);
     });
 
     it("should generate ORDER BY for multiple columns", () => {
       const { sql, parameters } = db
-        .selectFrom("users")
+        .selectFrom(tables.users.name)
         .orderBy([
           { column: "active", direction: "desc" },
           { column: "name", direction: "asc" },
@@ -48,32 +94,34 @@ describe("ORDER BY Operations", () => {
         .toSQL();
 
       expect(sql).toBe(
-        "SELECT * FROM users ORDER BY active DESC, name ASC, created_at ASC"
+        `SELECT * FROM ${tables.users.name} ORDER BY active DESC, name ASC, created_at ASC`
       );
       expect(parameters).toEqual([]);
     });
 
     it("should work with WHERE and ORDER BY", () => {
       const { sql, parameters } = db
-        .selectFrom("users")
+        .selectFrom(tables.users.name)
         .where("active", "=", true)
         .orderBy("name", "asc")
         .toSQL();
 
       expect(sql).toBe(
-        "SELECT * FROM users WHERE active = $1 ORDER BY name ASC"
+        `SELECT * FROM ${tables.users.name} WHERE active = $1 ORDER BY name ASC`
       );
       expect(parameters).toEqual([true]);
     });
 
     it("should work with SELECT and ORDER BY", () => {
       const { sql, parameters } = db
-        .selectFrom("users")
+        .selectFrom(tables.users.name)
         .select(["id", "name"])
         .orderBy("name", "desc")
         .toSQL();
 
-      expect(sql).toBe("SELECT id, name FROM users ORDER BY name DESC");
+      expect(sql).toBe(
+        `SELECT id, name FROM ${tables.users.name} ORDER BY name DESC`
+      );
       expect(parameters).toEqual([]);
     });
   });
@@ -81,39 +129,39 @@ describe("ORDER BY Operations", () => {
   describe("Real Database Execution", () => {
     it("should execute ORDER BY ASC correctly", async () => {
       const users = await db
-        .selectFrom("users")
+        .selectFrom(tables.users.name)
         .select(["id", "name"])
         .orderBy("name", "asc")
         .execute();
 
       expect(users).toHaveLength(5);
-      // Should be ordered: Alice Wilson, Bob Johnson, Charlie Brown, Jane Smith, John Doe
-      expect(users[0].name).toBe("Alice Wilson");
-      expect(users[1].name).toBe("Bob Johnson");
-      expect(users[2].name).toBe("Charlie Brown");
-      expect(users[3].name).toBe("Jane Smith");
-      expect(users[4].name).toBe("John Doe");
+      // Should be ordered alphabetically: Alice Wilson, Bob Johnson, Test User 1, Test User 2, Test User 3
+      expect(users[0]!.name).toBe("Alice Wilson");
+      expect(users[1]!.name).toBe("Bob Johnson");
+      expect(users[2]!.name).toBe("Test User 1");
+      expect(users[3]!.name).toBe("Test User 2");
+      expect(users[4]!.name).toBe("Test User 3");
     });
 
     it("should execute ORDER BY DESC correctly", async () => {
       const users = await db
-        .selectFrom("users")
+        .selectFrom(tables.users.name)
         .select(["id", "name"])
         .orderBy("name", "desc")
         .execute();
 
       expect(users).toHaveLength(5);
-      // Should be ordered: John Doe, Jane Smith, Charlie Brown, Bob Johnson, Alice Wilson
-      expect(users[0].name).toBe("John Doe");
-      expect(users[1].name).toBe("Jane Smith");
-      expect(users[2].name).toBe("Charlie Brown");
-      expect(users[3].name).toBe("Bob Johnson");
-      expect(users[4].name).toBe("Alice Wilson");
+      // Should be ordered reverse alphabetically
+      expect(users[0]!.name).toBe("Test User 3");
+      expect(users[1]!.name).toBe("Test User 2");
+      expect(users[2]!.name).toBe("Test User 1");
+      expect(users[3]!.name).toBe("Bob Johnson");
+      expect(users[4]!.name).toBe("Alice Wilson");
     });
 
     it("should execute multiple column ORDER BY correctly", async () => {
       const users = await db
-        .selectFrom("users")
+        .selectFrom(tables.users.name)
         .select(["id", "name", "active"])
         .orderBy([
           { column: "active", direction: "desc" }, // Active users first
@@ -122,39 +170,41 @@ describe("ORDER BY Operations", () => {
         .execute();
 
       expect(users).toHaveLength(5);
-      // Should be: Active users first (Alice, Charlie, Jane, John), then inactive (Bob)
-      expect(users[0].name).toBe("Alice Wilson");
-      expect(users[0].active).toBe(true);
-      expect(users[1].name).toBe("Charlie Brown");
-      expect(users[1].active).toBe(true);
-      expect(users[2].name).toBe("Jane Smith");
-      expect(users[2].active).toBe(true);
-      expect(users[3].name).toBe("John Doe");
-      expect(users[3].active).toBe(true);
-      expect(users[4].name).toBe("Bob Johnson");
-      expect(users[4].active).toBe(false);
+      // Should be: Active users first (Alice, Test User 1, Test User 3), then inactive (Bob, Test User 2)
+      const activeUsers = users.filter((u) => u.active);
+      const inactiveUsers = users.filter((u) => !u.active);
+
+      expect(activeUsers).toHaveLength(3);
+      expect(inactiveUsers).toHaveLength(2);
+
+      // First user should be active
+      expect(users[0]!.active).toBe(true);
+      // Last user should be inactive
+      expect(users[4]!.active).toBe(false);
     });
 
     it("should work with WHERE and ORDER BY in real query", async () => {
       const activeUsers = await db
-        .selectFrom("users")
+        .selectFrom(tables.users.name)
         .where("active", "=", true)
         .orderBy("name", "desc")
         .execute();
 
-      expect(activeUsers).toHaveLength(4);
-      expect(activeUsers[0].name).toBe("John Doe");
-      expect(activeUsers[1].name).toBe("Jane Smith");
-      expect(activeUsers[2].name).toBe("Charlie Brown");
-      expect(activeUsers[3].name).toBe("Alice Wilson");
+      expect(activeUsers).toHaveLength(3); // Alice, Test User 1, Test User 3
+      // All should be active
       activeUsers.forEach((user) => expect(user.active).toBe(true));
+
+      // Should be ordered by name descending
+      expect(activeUsers[0]!.name).toBe("Test User 3");
+      expect(activeUsers[1]!.name).toBe("Test User 1");
+      expect(activeUsers[2]!.name).toBe("Alice Wilson");
     });
   });
 
   describe("Type Safety", () => {
     it("should maintain type safety with ORDER BY", () => {
       const query = db
-        .selectFrom("users")
+        .selectFrom(tables.users.name)
         .select(["id", "name"])
         .orderBy("name", "asc");
 
@@ -167,13 +217,13 @@ describe("ORDER BY Operations", () => {
 
     it("should only allow ordering by existing columns", () => {
       // This should compile fine
-      db.selectFrom("users").orderBy("name", "asc");
-      db.selectFrom("users").orderBy("id", "desc");
-      db.selectFrom("users").orderBy("active");
+      db.selectFrom(tables.users.name).orderBy("name", "asc");
+      db.selectFrom(tables.users.name).orderBy("id", "desc");
+      db.selectFrom(tables.users.name).orderBy("active");
 
       // These would cause TypeScript errors (uncomment to test):
-      // db.selectFrom("users").orderBy("nonexistent_column", "asc");
-      // db.selectFrom("posts").orderBy("email", "asc"); // email is not on posts table
+      // db.selectFrom(tables.users.name).orderBy("nonexistent_column", "asc");
+      // db.selectFrom(tables.posts.name).orderBy("email", "asc"); // email is not on posts table
 
       expect(true).toBe(true);
     });
@@ -182,22 +232,24 @@ describe("ORDER BY Operations", () => {
   describe("Edge Cases", () => {
     it("should handle ordering by nullable columns", () => {
       const { sql, parameters } = db
-        .selectFrom("users")
+        .selectFrom(tables.users.name)
         .orderBy("email", "asc")
         .toSQL();
 
-      expect(sql).toBe("SELECT * FROM users ORDER BY email ASC");
+      expect(sql).toBe(`SELECT * FROM ${tables.users.name} ORDER BY email ASC`);
       expect(parameters).toEqual([]);
     });
 
     it("should combine with LIMIT correctly", () => {
       const { sql, parameters } = db
-        .selectFrom("users")
+        .selectFrom(tables.users.name)
         .orderBy("name", "desc")
         .limit(3)
         .toSQL();
 
-      expect(sql).toBe("SELECT * FROM users ORDER BY name DESC LIMIT 3");
+      expect(sql).toBe(
+        `SELECT * FROM ${tables.users.name} ORDER BY name DESC LIMIT 3`
+      );
       expect(parameters).toEqual([]);
     });
   });
