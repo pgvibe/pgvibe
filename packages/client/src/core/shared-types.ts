@@ -221,7 +221,7 @@ export type GetColumnReferences<
   DB,
   TE extends string | readonly string[]
 > = TE extends readonly string[]
-  ? string // For now, just allow any string for multi-table
+  ? GetMultiTableColumnReferences<DB, TE>
   : TE extends `${infer TableName} as ${infer AliasName}`
   ? TableName extends keyof DB
     ? // Table with alias: support both "column" and "alias.column"
