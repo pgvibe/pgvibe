@@ -26,13 +26,9 @@ async function playground() {
       .insertInto("users as u")
       .values({
         name: "John Doe",
-        // email is optional (nullable)
-        // id is optional (generated)
-        // active is optional (has default)
-        // created_at is optional (has default)
-        // tags, permissions, scores are optional (have defaults)
+        email: "john@example.com",
       })
-      .returning(["id", "name", "email", "active"])
+      .returning(["id", "name", "u.email"])
       .execute();
 
     console.log("✅ Insert with minimal data:", result1);
@@ -46,7 +42,7 @@ async function playground() {
         active: false, // Overriding default
         tags: ["admin", "user"], // Providing array default
       })
-      .returning(["id", "name", "email", "active", "tags"])
+      .returning(["id", "name", "email", "active", "u.active"])
       .execute();
 
     console.log("✅ Insert with optional fields:", result2);

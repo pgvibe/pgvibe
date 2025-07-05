@@ -4,7 +4,7 @@
 import { InsertQueryNode } from "../ast/insert-query-node";
 import type { PostgreSQL } from "../postgres/postgres-dialect";
 import type { ColumnReference } from "./select-query-builder";
-import type { InsertType, ExtractBaseType } from "../types/utility-types";
+import type { InsertType, ExtractGenerated } from "../types/utility-types";
 import type { Prettify } from "../types/select-result";
 import type {
   TableExpression,
@@ -39,11 +39,11 @@ export type InsertReturningResult<
       : P]: P extends `${infer Table}.${infer Column}`
       ? Table extends TB
         ? Column extends keyof DB[Table]
-          ? ExtractBaseType<DB[Table][Column]>
+          ? ExtractGenerated<DB[Table][Column]>
           : never
         : never
       : P extends keyof DB[TB]
-      ? ExtractBaseType<DB[TB][P]>
+      ? ExtractGenerated<DB[TB][P]>
       : never;
   }[]
 >;
@@ -53,7 +53,7 @@ export type InsertReturningResult<
  */
 export type InsertReturningAllResult<DB, TB extends keyof DB> = Prettify<
   {
-    [K in keyof DB[TB]]: ExtractBaseType<DB[TB][K]>;
+    [K in keyof DB[TB]]: ExtractGenerated<DB[TB][K]>;
   }[]
 >;
 
@@ -123,7 +123,9 @@ export interface InsertQueryBuilder<DB, TB extends keyof DB, O> {
    * Add ON CONFLICT clause for conflict resolution
    */
   onConflict(
-    builder: (oc: OnConflictBuilder<DB, TB>) => OnConflictColumnBuilder<DB, TB>
+    builder: (
+      oc: OnConflictBuilder<DB, TB>
+    ) => InsertQueryBuilder<DB, TB, PrettifiedInsertResult>
   ): InsertQueryBuilder<DB, TB, O>;
 
   /**
@@ -148,8 +150,45 @@ export interface InsertQueryBuilder<DB, TB extends keyof DB, O> {
 }
 
 /**
+ * Column reference type for aliased INSERT operations
+ * Only allows valid column references for the given table expression
+ * - For "table as alias": allows "column" and "alias.column" but NOT "table.column"
+ * - For "table": allows "column" and "table.column"
+ */
+export type AliasColumnReference<
+  DB,
+  TE extends string,
+  TB extends keyof DB
+> = GetColumnReferences<DB, TE>;
+
+/**
+ * Result type for INSERT operations with RETURNING and alias support
+ * Properly narrows the result to only include the requested columns
+ */
+export type AliasInsertReturningResult<
+  DB,
+  TE extends string,
+  TB extends keyof DB,
+  K extends readonly AliasColumnReference<DB, TE, TB>[]
+> = Prettify<
+  {
+    [P in K[number] as P extends `${infer Table}.${infer Column}`
+      ? Column
+      : P]: P extends `${infer Table}.${infer Column}`
+      ? Table extends TB
+        ? Column extends keyof DB[Table]
+          ? ExtractGenerated<DB[Table][Column]>
+          : never
+        : never
+      : P extends keyof DB[TB]
+      ? ExtractGenerated<DB[TB][P]>
+      : never;
+  }[]
+>;
+
+/**
  * Alias-aware INSERT query builder interface that supports table aliases
- * This interface tracks the original table expression to enable alias support
+ * Uses proper type narrowing for RETURNING clauses
  */
 export interface AliasedInsertQueryBuilder<
   DB,
@@ -167,10 +206,16 @@ export interface AliasedInsertQueryBuilder<
   /**
    * Add RETURNING clause for specific columns with alias support
    * Supports both 'id' and 'u.id' syntax when table has alias
+   * Properly narrows return type to only include requested columns
    */
-  returning<K extends readonly GetColumnReferences<DB, TE>[]>(
+  returning<K extends readonly AliasColumnReference<DB, TE, TB>[]>(
     columns: K
-  ): AliasedInsertQueryBuilder<DB, TE, TB, InsertReturningResult<DB, TB, K>>;
+  ): AliasedInsertQueryBuilder<
+    DB,
+    TE,
+    TB,
+    AliasInsertReturningResult<DB, TE, TB, K>
+  >;
 
   /**
    * Add RETURNING * clause
@@ -186,7 +231,9 @@ export interface AliasedInsertQueryBuilder<
    * Add ON CONFLICT clause for conflict resolution
    */
   onConflict(
-    builder: (oc: OnConflictBuilder<DB, TB>) => OnConflictColumnBuilder<DB, TB>
+    builder: (
+      oc: OnConflictBuilder<DB, TB>
+    ) => InsertQueryBuilder<DB, TB, PrettifiedInsertResult>
   ): AliasedInsertQueryBuilder<DB, TE, TB, O>;
 
   /**
@@ -410,7 +457,9 @@ export class InsertQueryBuilderImpl<DB, TB extends keyof DB, O>
   }
 
   onConflict(
-    builder: (oc: OnConflictBuilder<DB, TB>) => OnConflictColumnBuilder<DB, TB>
+    builder: (
+      oc: OnConflictBuilder<DB, TB>
+    ) => InsertQueryBuilder<DB, TB, PrettifiedInsertResult>
   ): InsertQueryBuilder<DB, TB, O> {
     const onConflictBuilder = new OnConflictBuilderImpl<DB, TB>(this);
     const result = builder(onConflictBuilder);
@@ -542,9 +591,14 @@ export class AliasedInsertQueryBuilderImpl<
     >(this.tableName, this.tableExpression, this.postgres, newNode);
   }
 
-  returning<K extends readonly GetColumnReferences<DB, TE>[]>(
+  returning<K extends readonly AliasColumnReference<DB, TE, TB>[]>(
     columns: K
-  ): AliasedInsertQueryBuilder<DB, TE, TB, InsertReturningResult<DB, TB, K>> {
+  ): AliasedInsertQueryBuilder<
+    DB,
+    TE,
+    TB,
+    AliasInsertReturningResult<DB, TE, TB, K>
+  > {
     const returningNode = InsertQueryNode.createReturningNode([
       ...columns,
     ] as string[]);
@@ -557,7 +611,7 @@ export class AliasedInsertQueryBuilderImpl<
       DB,
       TE,
       TB,
-      InsertReturningResult<DB, TB, K>
+      AliasInsertReturningResult<DB, TE, TB, K>
     >(this.tableName, this.tableExpression, this.postgres, newNode);
   }
 
@@ -582,7 +636,9 @@ export class AliasedInsertQueryBuilderImpl<
   }
 
   onConflict(
-    builder: (oc: OnConflictBuilder<DB, TB>) => OnConflictColumnBuilder<DB, TB>
+    builder: (
+      oc: OnConflictBuilder<DB, TB>
+    ) => InsertQueryBuilder<DB, TB, PrettifiedInsertResult>
   ): AliasedInsertQueryBuilder<DB, TE, TB, O> {
     // Create a temporary regular builder for ON CONFLICT handling
     const tempBuilder = new InsertQueryBuilderImpl<DB, TB, O>(

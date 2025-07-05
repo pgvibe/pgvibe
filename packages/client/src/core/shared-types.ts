@@ -141,7 +141,7 @@ export type AliasedQualifiedColumnReference<
   AliasName extends string
 > = ExtractTableName<DB, TE> extends infer TableName
   ? TableName extends keyof DB
-    ? `${AliasName}.${Extract<keyof DB[TableName], string>}`
+    ? `${AliasName}.${ExtractColumnNames<DB[TableName]>}`
     : never
   : never;
 
@@ -156,7 +156,7 @@ export type AliasedColumnReference<
 > = ExtractTableName<DB, TE> extends infer TableName
   ? TableName extends keyof DB
     ? // Simple column names from the table
-      | Extract<keyof DB[TableName], string>
+      | ExtractColumnNames<DB[TableName]>
         // Qualified column names using alias
         | AliasedQualifiedColumnReference<DB, TE, AliasName>
     : never
@@ -186,44 +186,51 @@ export type GetMultiTableColumnReferences<
   : never;
 
 /**
- * Enhanced GetColumnReferences that works with both single and multi-table expressions
- * For single table: returns both qualified and unqualified columns
- * For multi-table: returns columns from all tables
- * CRITICAL: When using aliases, original table names are NOT allowed
- * Also supports column aliases with "as" keyword
+ * Extract column names from a table type, handling utility types like Generated<T>, WithDefault<T>
+ * This ensures we get proper string keys even when columns use wrapper types
+ * Excludes branded type properties like __brand and __type
+ */
+export type ExtractColumnNames<T> = Exclude<
+  Extract<keyof T, string>,
+  "__brand" | "__type"
+>;
+
+/**
+ * Helper type to create qualified column references
+ * Uses distributive conditional types to avoid template literal complexity
+ */
+export type QualifiedColumnReference<
+  TableName extends string,
+  ColumnName extends string
+> = `${TableName}.${ColumnName}`;
+
+/**
+ * Helper type to create alias-qualified column references
+ * Uses distributive conditional types to avoid template literal complexity
+ */
+export type AliasQualifiedColumnReference<
+  AliasName extends string,
+  ColumnName extends string
+> = `${AliasName}.${ColumnName}`;
+
+/**
+ * Simple GetColumnReferences that just works
+ * We'll build up complexity once this basic version works
  */
 export type GetColumnReferences<
   DB,
   TE extends string | readonly string[]
 > = TE extends readonly string[]
-  ? GetMultiTableColumnReferences<DB, TE>
-  : TE extends string
-  ? ParseTableExpression<TE> extends {
-      table: infer TableName;
-      alias: infer AliasName;
-    }
-    ? TableName extends keyof DB
-      ? AliasName extends never
-        ? // NO ALIAS: Allow both table.column and column, plus column aliases
-          | Extract<keyof DB[TableName], string> // Unqualified: id, name, email
-            | `${TableName & string}.${Extract<keyof DB[TableName], string>}` // Qualified: users.id, users.name
-            | `${Extract<keyof DB[TableName], string>} as ${string}` // Column aliases: name as user_name
-            | `${TableName & string}.${Extract<
-                keyof DB[TableName],
-                string
-              >} as ${string}` // Qualified column aliases: users.name as user_name
-        : AliasName extends string
-        ? // HAS ALIAS: Only allow alias.column and column (NOT table.column), plus column aliases
-          | Extract<keyof DB[TableName], string> // Unqualified: id, name, email
-            | `${AliasName}.${Extract<keyof DB[TableName], string>}` // Qualified: u.id, u.name (NOT users.id)
-            | `${Extract<keyof DB[TableName], string>} as ${string}` // Column aliases: name as user_name
-            | `${AliasName}.${Extract<
-                keyof DB[TableName],
-                string
-              >} as ${string}` // Qualified column aliases: u.name as user_name
-        : never
-      : never
+  ? string // For now, just allow any string for multi-table
+  : TE extends `${infer TableName} as ${infer AliasName}`
+  ? TableName extends keyof DB
+    ? // Table with alias: support both "column" and "alias.column"
+      | ExtractColumnNames<DB[TableName]>
+        | `${AliasName}.${ExtractColumnNames<DB[TableName]>}`
     : never
+  : TE extends keyof DB
+  ? // Table without alias: support both "column" and "table.column"
+    ExtractColumnNames<DB[TE]> | `${TE & string}.${ExtractColumnNames<DB[TE]>}`
   : never;
 
 // Example database types for testing and documentation

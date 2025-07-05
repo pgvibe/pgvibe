@@ -38,15 +38,14 @@ import { parseTableExpression } from "./core/shared-types";
 // Export utility types for operation-aware type system
 export type {
   Generated,
-  WithDefault,
-  Nullable,
   InsertType,
   UpdateType,
   SelectType,
-  ExtractBaseType,
+  ExtractGenerated,
   IsGenerated,
-  HasDefault,
-  IsNullable,
+  // Legacy exports for backward compatibility
+  WithDefault,
+  Nullable,
 } from "./core/types/utility-types";
 
 /**

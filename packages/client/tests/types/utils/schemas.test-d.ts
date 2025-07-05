@@ -51,26 +51,26 @@ export interface CommentTable {
 
 /**
  * Test Users table for integration tests
- * Uses utility types to encode database semantics
+ * Uses simplified Generated<T> for all database-provided values
  */
 export interface TestUserTable {
   id: Generated<number>; // SERIAL PRIMARY KEY (auto-generated)
   name: string; // VARCHAR(255) NOT NULL (required)
-  email: Nullable<string>; // VARCHAR(255) UNIQUE (nullable)
-  active: WithDefault<boolean>; // BOOLEAN DEFAULT true (has default)
+  email: Generated<string | null>; // VARCHAR(255) UNIQUE (nullable - database provides null if not specified)
+  active: Generated<boolean>; // BOOLEAN DEFAULT true (database provides default)
   created_at: Generated<Date>; // TIMESTAMP DEFAULT CURRENT_TIMESTAMP (auto-generated)
 }
 
 /**
  * Test Posts table for integration tests
- * Uses utility types to encode database semantics
+ * Uses simplified Generated<T> for all database-provided values
  */
 export interface TestPostTable {
   id: Generated<number>; // SERIAL PRIMARY KEY (auto-generated)
   user_id: number; // INTEGER REFERENCES test_users(id) (required)
   title: string; // VARCHAR(255) NOT NULL (required)
-  content: Nullable<string>; // TEXT (nullable)
-  published: WithDefault<boolean>; // BOOLEAN DEFAULT false (has default)
+  content: Generated<string | null>; // TEXT (nullable - database provides null if not specified)
+  published: Generated<boolean>; // BOOLEAN DEFAULT false (database provides default)
   created_at: Generated<Date>; // TIMESTAMP DEFAULT CURRENT_TIMESTAMP (auto-generated)
 }
 
