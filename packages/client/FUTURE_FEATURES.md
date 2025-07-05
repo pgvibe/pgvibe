@@ -1,6 +1,6 @@
-# ZenQ Future Features
+# pgvibe Future Features
 
-This document outlines planned advanced PostgreSQL features for ZenQ after the Foundation MVP is complete.
+This document outlines planned advanced PostgreSQL features for pgvibe after the Foundation MVP is complete.
 
 ## PostgreSQL Advanced Features
 

@@ -107,7 +107,7 @@ describe("Test Suite Name", () => {
   const testId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const userTable = `test_users_${testId}`;
   const postTable = `test_posts_${testId}`;
-  let db: ZenQ<any>;
+  let db: pgvibe<any>;
 
   beforeAll(async () => {
     db = createIntegrationTestDatabase();
@@ -232,15 +232,15 @@ export interface TestTables {
 }
 
 export async function createTestTables(
-  db: ZenQ<any>,
+  db: pgvibe<any>,
   tables: TestTables
 ): Promise<void>;
 export async function seedTestData(
-  db: ZenQ<any>,
+  db: pgvibe<any>,
   tables: TestTables
 ): Promise<void>;
 export async function cleanupTestTables(
-  db: ZenQ<any>,
+  db: pgvibe<any>,
   tableNames: string[]
 ): Promise<void>;
 ```

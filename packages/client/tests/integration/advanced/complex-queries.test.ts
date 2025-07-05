@@ -2,7 +2,7 @@
 // Tests advanced query patterns and expression builder with isolated test tables
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { ZenQ } from "../../../src/query-builder";
+import { pgvibe } from "../../../src/query-builder";
 import {
   generateTestId,
   createTestDatabase,
@@ -57,13 +57,13 @@ function createComplexQueryTables(testId: string) {
   };
 }
 
-async function createComplexQueryDbTables(db: ZenQ<any>, tables: any) {
+async function createComplexQueryDbTables(db: pgvibe<any>, tables: any) {
   await db.query(tables.users.schema);
   await db.query(tables.posts.schema);
   await db.query(tables.comments.schema);
 }
 
-async function seedComplexQueryData(db: ZenQ<any>, tables: any) {
+async function seedComplexQueryData(db: pgvibe<any>, tables: any) {
   // Insert users with variety of data for complex queries
   await db.query(`
     INSERT INTO ${tables.users.name} (name, email, active, role, score, created_at)
@@ -104,7 +104,7 @@ async function seedComplexQueryData(db: ZenQ<any>, tables: any) {
 describe("Complex Queries Integration Tests", () => {
   const testId = generateTestId();
   const tables = createComplexQueryTables(testId);
-  let db: ZenQ<any>;
+  let db: pgvibe<any>;
 
   beforeAll(async () => {
     db = createTestDatabase();

@@ -98,7 +98,7 @@ INSERT INTO users (name, email, active, tags, permissions, scores) VALUES
 -- Posts data for testing (designed to work with 5 users and test array operations)
 INSERT INTO posts (user_id, title, content, published, categories, ratings) VALUES
 -- Posts by John Doe (user 1) - TypeScript developer
-(1, 'Getting Started with ZenQ', 'This is my first post about ZenQ, a type-safe query builder...', true,
+(1, 'Getting Started with pgvibe', 'This is my first post about pgvibe, a type-safe query builder...', true,
  ARRAY['tech', 'tutorial', 'typescript'], 
  ARRAY[5, 4, 5, 4, 5]),
 

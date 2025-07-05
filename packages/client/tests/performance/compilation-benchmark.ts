@@ -1,12 +1,12 @@
 // TypeScript Compilation Performance Benchmark
-// This file uses the large schema with complex ZenQ queries to stress-test TypeScript compilation
+// This file uses the large schema with complex pgvibe queries to stress-test TypeScript compilation
 // Measures how our JOIN nullability and smart error types perform under load
 
-import { ZenQ } from "../../src/query-builder";
+import { pgvibe } from "../../src/query-builder";
 import type { LargeDatabase } from "./large-schema";
 
-// Create ZenQ instance with large schema
-const db = new ZenQ<LargeDatabase>({
+// Create pgvibe instance with large schema
+const db = new pgvibe<LargeDatabase>({
   connectionString: "postgresql://test:test@localhost:54322/test",
 });
 

@@ -1,16 +1,16 @@
-// ZenQ Playground
+// pgvibe Playground
 // Test and experiment with the PostgreSQL-native query builder
 
-import { ZenQ, sql, raw } from "../src/query-builder";
+import { pgvibe, sql, raw } from "../src/query-builder";
 import type { ExampleDatabase } from "./types";
 
-console.log("🚀 ZenQ PostgreSQL-Native Query Builder");
-console.log("=====================================\n");
+console.log("🚀 pgvibe PostgreSQL-Native Query Builder");
+console.log("==========================================\n");
 
-// Create ZenQ instance with PostgreSQL
-const db = new ZenQ<ExampleDatabase>({
+// Create pgvibe instance with PostgreSQL
+const db = new pgvibe<ExampleDatabase>({
   connectionString:
-    "postgresql://zenq_user:zenq_password@localhost:54322/zenq_test",
+    "postgresql://pgvibe_user:pgvibe_password@localhost:54322/pgvibe_test",
 });
 
 async function playground() {

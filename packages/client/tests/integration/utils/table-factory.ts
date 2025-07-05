@@ -1,7 +1,7 @@
 // Table factory for dynamic table creation and management
 // Provides utilities for creating isolated test tables
 
-import { ZenQ } from "../../../src/query-builder";
+import { pgvibe } from "../../../src/query-builder";
 import { safeDbQuery } from "./test-helpers";
 
 /**
@@ -90,7 +90,7 @@ export function createCommentsTableSchema(
  * Create test tables in the database
  */
 export async function createTestTables(
-  db: ZenQ<any>,
+  db: pgvibe<any>,
   tables: TestTables
 ): Promise<void> {
   // Create tables in dependency order
@@ -106,7 +106,7 @@ export async function createTestTables(
  * Seed test tables with basic data
  */
 export async function seedTestData(
-  db: ZenQ<any>,
+  db: pgvibe<any>,
   tables: TestTables
 ): Promise<{ userIds: number[]; postIds: number[] }> {
   // Insert test users
@@ -151,7 +151,7 @@ export async function seedTestData(
  * Clean up test tables by dropping them
  */
 export async function cleanupTestTables(
-  db: ZenQ<any>,
+  db: pgvibe<any>,
   tableNames: string[]
 ): Promise<void> {
   // Drop tables in reverse dependency order to avoid foreign key issues

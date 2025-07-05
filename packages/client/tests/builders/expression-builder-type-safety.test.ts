@@ -2,13 +2,13 @@
 // Tests to ensure the expression builder provides proper type safety
 
 import { describe, test, expect } from "bun:test";
-import { ZenQ, type Database } from "../../src/query-builder";
+import { pgvibe, type Database } from "../../src/query-builder";
 
 describe("Expression Builder Type Safety Tests", () => {
-  const db = new ZenQ<Database>({
+  const db = new pgvibe<Database>({
     host: "localhost",
     port: 5432,
-    database: "zenq_test",
+    database: "pgvibe_test",
     user: "test",
     password: "test",
   });

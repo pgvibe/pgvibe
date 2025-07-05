@@ -2,13 +2,13 @@
 // Tests for complex WHERE clause functionality with AND/OR combinations
 
 import { describe, test, expect } from "bun:test";
-import { ZenQ, type Database } from "../../src/query-builder";
+import { pgvibe, type Database } from "../../src/query-builder";
 
 describe("Expression Builder Tests", () => {
-  const db = new ZenQ<Database>({
+  const db = new pgvibe<Database>({
     host: "localhost",
     port: 5432,
-    database: "zenq_test",
+    database: "pgvibe_test",
     user: "test",
     password: "test",
   });

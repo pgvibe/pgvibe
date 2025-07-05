@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { ZenQ } from "../../src/index";
+import { pgvibe } from "../../src/index";
 
 // Test database schema
 interface TestDB {
@@ -28,7 +28,7 @@ interface TestDB {
 }
 
 describe("Column Aliases in SELECT Clause Tests", () => {
-  const db = new ZenQ<TestDB>({
+  const db = new pgvibe<TestDB>({
     host: "localhost",
     port: 5432,
     database: "test",

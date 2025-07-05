@@ -1,4 +1,4 @@
-# PGTerra
+# pgvibe/migrations
 
 Infrastructure as Code for PostgreSQL databases. Define your schema in SQL, let PGTerra handle the migrations.
 

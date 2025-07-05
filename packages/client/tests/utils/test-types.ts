@@ -1,4 +1,4 @@
-// Test database types for ZenQ type testing
+// Test database types for pgvibe type testing
 // These types are used in tests and should match the database schema examples
 
 import type { JsonbType } from "../../src/core/builders/expression-builder";

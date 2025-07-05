@@ -2,7 +2,7 @@
 // Validates PostgreSQL array operations SQL compilation and AST generation
 
 import { describe, it, expect } from "bun:test";
-import { ZenQ } from "../../src/query-builder";
+import { pgvibe } from "../../src/query-builder";
 import type { ArrayType } from "../../src/core/types/array";
 
 // Test database schema with array columns
@@ -23,10 +23,10 @@ interface TestDatabase {
   };
 }
 
-const db = new ZenQ<TestDatabase>({
+const db = new pgvibe<TestDatabase>({
   host: "localhost",
   port: 5432,
-  database: "zenq_test",
+  database: "pgvibe_test",
   user: "test",
   password: "test",
 });

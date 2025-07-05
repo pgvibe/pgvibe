@@ -1,5 +1,5 @@
 import { expectError } from "tsd";
-import { ZenQ } from "../../../src/index";
+import { pgvibe } from "../../../src/index";
 
 // Test database schema
 interface Database {
@@ -20,7 +20,7 @@ interface Database {
   };
 }
 
-const db = new ZenQ<Database>({
+const db = new pgvibe<Database>({
   host: "localhost",
   port: 5432,
   database: "test",

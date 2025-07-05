@@ -2,7 +2,7 @@
 // Provides helper functions for test isolation and setup
 
 import { expect } from "bun:test";
-import { ZenQ } from "../../../src/query-builder";
+import { pgvibe } from "../../../src/query-builder";
 import { createIntegrationTestDatabase } from "../../utils/test-config";
 
 /**
@@ -51,7 +51,7 @@ export async function waitForDatabase(
 /**
  * Create a configured database instance for testing
  */
-export function createTestDatabase(): ZenQ<any> {
+export function createTestDatabase(): pgvibe<any> {
   return createIntegrationTestDatabase();
 }
 
@@ -60,7 +60,7 @@ export function createTestDatabase(): ZenQ<any> {
  * Useful for cleanup operations that should not fail tests
  */
 export async function safeDbQuery(
-  db: ZenQ<any>,
+  db: pgvibe<any>,
   query: string,
   description?: string
 ): Promise<void> {

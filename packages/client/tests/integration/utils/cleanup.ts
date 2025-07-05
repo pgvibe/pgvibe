@@ -1,7 +1,7 @@
 // Cleanup utilities for integration tests
 // Provides safe cleanup operations for test isolation
 
-import { ZenQ } from "../../../src/query-builder";
+import { pgvibe } from "../../../src/query-builder";
 import { safeDbQuery } from "./test-helpers";
 
 /**
@@ -9,7 +9,7 @@ import { safeDbQuery } from "./test-helpers";
  * Useful for cleaning up after test suites
  */
 export async function dropTablesByPrefix(
-  db: ZenQ<any>,
+  db: pgvibe<any>,
   prefix: string
 ): Promise<void> {
   try {
@@ -45,7 +45,7 @@ export async function dropTablesByPrefix(
  * Clean up all test tables
  * Useful for cleaning up after all integration tests
  */
-export async function cleanupAllTestTables(db: ZenQ<any>): Promise<void> {
+export async function cleanupAllTestTables(db: pgvibe<any>): Promise<void> {
   await dropTablesByPrefix(db, "test_");
 }
 
@@ -54,7 +54,7 @@ export async function cleanupAllTestTables(db: ZenQ<any>): Promise<void> {
  * Ensures consistent IDs across test runs
  */
 export async function resetTableSequences(
-  db: ZenQ<any>,
+  db: pgvibe<any>,
   tableNames: string[]
 ): Promise<void> {
   for (const tableName of tableNames) {
@@ -71,7 +71,7 @@ export async function resetTableSequences(
  * Alternative to dropping tables for faster cleanup
  */
 export async function truncateTestTables(
-  db: ZenQ<any>,
+  db: pgvibe<any>,
   tableNames: string[]
 ): Promise<void> {
   if (tableNames.length === 0) return;
@@ -89,7 +89,7 @@ export async function truncateTestTables(
  * Useful for debugging or verification
  */
 export async function getTablesByPattern(
-  db: ZenQ<any>,
+  db: pgvibe<any>,
   pattern: string
 ): Promise<string[]> {
   try {
@@ -120,7 +120,7 @@ export interface CleanupOptions {
 }
 
 export async function performTestCleanup(
-  db: ZenQ<any>,
+  db: pgvibe<any>,
   tableNames: string[],
   options: CleanupOptions = {}
 ): Promise<void> {

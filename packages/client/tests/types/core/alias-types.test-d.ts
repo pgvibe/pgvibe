@@ -1,8 +1,8 @@
 import { expectType } from "tsd";
-import { ZenQ } from "../../../src/query-builder";
+import { pgvibe } from "../../../src/query-builder";
 import type { Database } from "../../../src/core/shared-types";
 
-const db = new ZenQ<Database>({
+const db = new pgvibe<Database>({
   connectionString: "postgresql://test:test@localhost:5432/test",
 });
 

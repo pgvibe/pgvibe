@@ -1,5 +1,5 @@
 // TSD Type Tests for Edge Cases
-// These tests verify that ZenQ handles edge cases and boundary conditions correctly
+// These tests verify that pgvibe handles edge cases and boundary conditions correctly
 
 import { expectType, expectError } from "tsd";
 import { createTestDatabase } from "../../utils/test-config";

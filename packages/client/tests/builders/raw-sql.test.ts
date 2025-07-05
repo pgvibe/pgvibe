@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { ZenQ, sql, raw } from "../../src/query-builder";
+import { pgvibe, sql, raw } from "../../src/query-builder";
 import type { Database } from "../utils/test-types";
 import { createTestDatabase } from "../utils/test-config";
 

@@ -1,7 +1,7 @@
 // Centralized test configuration for PostgreSQL database
 // Matches credentials from docker-compose.yml
 
-import { ZenQ } from "../../src/query-builder";
+import { pgvibe } from "../../src/query-builder";
 import type { Database, IntegrationTestDatabase } from "./test-types";
 
 /**
@@ -10,22 +10,22 @@ import type { Database, IntegrationTestDatabase } from "./test-types";
  */
 export const TEST_DATABASE_CONFIG = {
   connectionString:
-    "postgresql://zenq_user:zenq_password@localhost:54322/zenq_test",
+    "postgresql://pgvibe_user:pgvibe_password@localhost:54322/pgvibe_test",
 };
 
 /**
- * Create a ZenQ instance for testing with the correct database configuration
+ * Create a pgvibe instance for testing with the correct database configuration
  */
-export function createTestDatabase(): ZenQ<Database> {
-  return new ZenQ<Database>(TEST_DATABASE_CONFIG);
+export function createTestDatabase(): pgvibe<Database> {
+  return new pgvibe<Database>(TEST_DATABASE_CONFIG);
 }
 
 /**
- * Create a ZenQ instance for integration testing with test table types
+ * Create a pgvibe instance for integration testing with test table types
  * Use this for integration tests that create their own test tables
  */
-export function createIntegrationTestDatabase(): ZenQ<IntegrationTestDatabase> {
-  return new ZenQ<IntegrationTestDatabase>(TEST_DATABASE_CONFIG);
+export function createIntegrationTestDatabase(): pgvibe<IntegrationTestDatabase> {
+  return new pgvibe<IntegrationTestDatabase>(TEST_DATABASE_CONFIG);
 }
 
 /**

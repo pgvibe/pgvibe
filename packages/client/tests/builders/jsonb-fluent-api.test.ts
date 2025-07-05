@@ -2,7 +2,7 @@
 // Tests for the new fluent API that replaces (column, operator, value) pattern
 
 import { describe, test, expect } from "bun:test";
-import { ZenQ } from "../../src/query-builder";
+import { pgvibe } from "../../src/query-builder";
 import type { JsonbType } from "../../src/core/builders/expression-builder";
 
 // Test database schema with realistic JSONB columns
@@ -26,10 +26,10 @@ interface JsonbFluentTestDB {
 }
 
 describe("JSONB Fluent API - TDD Implementation", () => {
-  const db = new ZenQ<JsonbFluentTestDB>({
+  const db = new pgvibe<JsonbFluentTestDB>({
     host: "localhost",
     port: 5432,
-    database: "zenq_test",
+    database: "pgvibe_test",
     user: "test",
     password: "test",
   });

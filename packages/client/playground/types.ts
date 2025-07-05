@@ -1,5 +1,5 @@
-// Example database types for ZenQ playground
-// These types demonstrate how to define your database schema for ZenQ
+// Example database types for pgvibe playground
+// These types demonstrate how to define your database schema for pgvibe
 
 /**
  * Example User table

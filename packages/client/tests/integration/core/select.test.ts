@@ -2,7 +2,7 @@
 // Tests SELECT operations with isolated test tables
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { ZenQ } from "../../../src/query-builder";
+import { pgvibe } from "../../../src/query-builder";
 import {
   generateTestId,
   createTestDatabase,
@@ -19,7 +19,7 @@ import { performTestCleanup } from "../utils/cleanup";
 describe("SELECT Integration Tests", () => {
   const testId = generateTestId();
   const tables = createStandardTestTables(testId);
-  let db: ZenQ<any>;
+  let db: pgvibe<any>;
   let userIds: number[];
   let postIds: number[];
 

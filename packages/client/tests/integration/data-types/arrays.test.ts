@@ -2,7 +2,7 @@
 // Tests PostgreSQL array operations with isolated test tables
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { ZenQ } from "../../../src/query-builder";
+import { pgvibe } from "../../../src/query-builder";
 import {
   generateTestId,
   createTestDatabase,
@@ -46,12 +46,12 @@ function createArrayTestTables(testId: string) {
   };
 }
 
-async function createArrayTables(db: ZenQ<any>, tables: any) {
+async function createArrayTables(db: pgvibe<any>, tables: any) {
   await db.query(tables.users.schema);
   await db.query(tables.posts.schema);
 }
 
-async function seedArrayData(db: ZenQ<any>, tables: any) {
+async function seedArrayData(db: pgvibe<any>, tables: any) {
   // Insert users with array data
   await db.query(`
     INSERT INTO ${tables.users.name} (name, email, active, tags, permissions, scores)
@@ -113,7 +113,7 @@ async function seedArrayData(db: ZenQ<any>, tables: any) {
 describe("Array Operations Integration Tests", () => {
   const testId = generateTestId();
   const tables = createArrayTestTables(testId);
-  let db: ZenQ<any>;
+  let db: pgvibe<any>;
 
   beforeAll(async () => {
     db = createTestDatabase();

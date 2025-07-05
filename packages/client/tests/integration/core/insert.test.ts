@@ -9,7 +9,7 @@ import {
   afterAll,
   beforeEach,
 } from "bun:test";
-import { ZenQ } from "../../../src/query-builder";
+import { pgvibe } from "../../../src/query-builder";
 import {
   generateTestId,
   createTestDatabase,
@@ -24,7 +24,7 @@ import { performTestCleanup } from "../utils/cleanup";
 describe("INSERT Integration Tests", () => {
   const testId = generateTestId();
   const tables = createMinimalTestTables(testId);
-  let db: ZenQ<any>;
+  let db: pgvibe<any>;
 
   beforeAll(async () => {
     db = createTestDatabase();

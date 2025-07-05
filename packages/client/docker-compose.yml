@@ -1,20 +1,20 @@
-name: zenq
+name: pgvibe
 
 services:
   postgres:
     image: postgres:15-alpine
-    container_name: zenq-postgres
+    container_name: pgvibe-postgres
     environment:
-      POSTGRES_DB: zenq_test
-      POSTGRES_USER: zenq_user
-      POSTGRES_PASSWORD: zenq_password
+      POSTGRES_DB: pgvibe_test
+      POSTGRES_USER: pgvibe_user
+      POSTGRES_PASSWORD: pgvibe_password
     ports:
       - "54322:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./databases/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U zenq_user -d zenq_test"]
+      test: ["CMD-SHELL", "pg_isready -U pgvibe_user -d pgvibe_test"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -25,4 +25,4 @@ volumes:
 # Development helper services
 networks:
   default:
-    name: zenq-network
+    name: pgvibe-network

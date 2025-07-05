@@ -2,7 +2,7 @@
 // Tests VARCHAR, TEXT, CHAR, BOOLEAN operations with isolated test tables
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { ZenQ } from "../../../src/query-builder";
+import { pgvibe } from "../../../src/query-builder";
 import {
   generateTestId,
   createTestDatabase,
@@ -13,7 +13,7 @@ import { performTestCleanup } from "../utils/cleanup";
 describe("Text and Boolean Data Types Integration Tests", () => {
   const testId = generateTestId();
   const tableName = `test_text_bool_${testId}`;
-  let db: ZenQ<any>;
+  let db: pgvibe<any>;
 
   beforeAll(async () => {
     db = createTestDatabase();

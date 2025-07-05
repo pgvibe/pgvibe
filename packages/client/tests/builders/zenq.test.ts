@@ -1,14 +1,14 @@
-// ZenQ main class tests
+// pgvibe main class tests
 // Tests the core fluent API functionality
 
 import { describe, test, expect } from "bun:test";
-import { ZenQ, type Database } from "../../src/query-builder";
+import { pgvibe, type Database } from "../../src/query-builder";
 import { createTestDatabase, TEST_DATABASE_CONFIG } from "../utils/test-config";
 
-describe("ZenQ Query Builder", () => {
-  describe("ZenQ Class", () => {
-    test("should create ZenQ instance with PostgreSQL config", () => {
-      const db = new ZenQ<Database>(TEST_DATABASE_CONFIG);
+describe("pgvibe Query Builder", () => {
+  describe("pgvibe Class", () => {
+    test("should create pgvibe instance with PostgreSQL config", () => {
+      const db = new pgvibe<Database>(TEST_DATABASE_CONFIG);
 
       expect(db).toBeDefined();
       expect(db.getPostgreSQL()).toBeDefined();

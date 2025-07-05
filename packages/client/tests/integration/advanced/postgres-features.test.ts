@@ -2,7 +2,7 @@
 // Tests PostgreSQL-specific features with isolated test tables
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { ZenQ } from "../../../src/query-builder";
+import { pgvibe } from "../../../src/query-builder";
 import {
   generateTestId,
   createTestDatabase,
@@ -63,13 +63,13 @@ function createPostgresFeaturesTable(testId: string) {
   };
 }
 
-async function createPostgresFeaturesDbTables(db: ZenQ<any>, tables: any) {
+async function createPostgresFeaturesDbTables(db: pgvibe<any>, tables: any) {
   await db.query(tables.products.schema);
   await db.query(tables.orders.schema);
   await db.query(tables.analytics.schema);
 }
 
-async function seedPostgresFeaturesData(db: ZenQ<any>, tables: any) {
+async function seedPostgresFeaturesData(db: pgvibe<any>, tables: any) {
   // Insert products with various PostgreSQL data types
   await db.query(`
     INSERT INTO ${tables.products.name} (name, description, price, tags, metadata, coordinates)
@@ -142,7 +142,7 @@ async function seedPostgresFeaturesData(db: ZenQ<any>, tables: any) {
 describe("PostgreSQL Advanced Features Integration Tests", () => {
   const testId = generateTestId();
   const tables = createPostgresFeaturesTable(testId);
-  let db: ZenQ<any>;
+  let db: pgvibe<any>;
 
   beforeAll(async () => {
     db = createTestDatabase();

@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeAll } from "bun:test";
-import { ZenQ } from "../../../src/query-builder";
+import { pgvibe } from "../../../src/query-builder";
 import type { Database } from "../../../src/core/shared-types";
 import { createTestDatabase, waitForDatabase } from "../utils/test-helpers";
 
 describe("Alias Integration Tests", () => {
-  let db: ZenQ<Database>;
+  let db: pgvibe<Database>;
 
   beforeAll(async () => {
     await waitForDatabase();

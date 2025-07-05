@@ -47,7 +47,7 @@ function measureTypeScriptCompilation(testFile: string): {
 function createSmallSchemaTest(): string {
   const smallTestContent = `
 // Small Schema Baseline Test
-import { ZenQ } from "../../src/query-builder";
+import { pgvibe } from "../../src/query-builder";
 
 interface SmallDatabase {
   users: {
@@ -65,7 +65,7 @@ interface SmallDatabase {
   };
 }
 
-const db = new ZenQ<SmallDatabase>({
+const db = new pgvibe<SmallDatabase>({
   connectionString: "postgresql://test:test@localhost:54322/test"
 });
 

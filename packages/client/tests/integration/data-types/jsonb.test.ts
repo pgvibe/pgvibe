@@ -2,7 +2,7 @@
 // Tests PostgreSQL JSONB operations with isolated test tables
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { ZenQ } from "../../../src/query-builder";
+import { pgvibe } from "../../../src/query-builder";
 import {
   generateTestId,
   createTestDatabase,
@@ -41,12 +41,12 @@ function createJsonbTestTables(testId: string) {
   };
 }
 
-async function createJsonbTables(db: ZenQ<any>, tables: any) {
+async function createJsonbTables(db: pgvibe<any>, tables: any) {
   await db.query(tables.users.schema);
   await db.query(tables.products.schema);
 }
 
-async function seedJsonbData(db: ZenQ<any>, tables: any) {
+async function seedJsonbData(db: pgvibe<any>, tables: any) {
   // Insert users with JSONB data
   await db.query(`
     INSERT INTO ${tables.users.name} (name, email, settings, metadata)
@@ -93,7 +93,7 @@ async function seedJsonbData(db: ZenQ<any>, tables: any) {
 describe("JSONB Operations Integration Tests", () => {
   const testId = generateTestId();
   const tables = createJsonbTestTables(testId);
-  let db: ZenQ<any>;
+  let db: pgvibe<any>;
 
   beforeAll(async () => {
     db = createTestDatabase();

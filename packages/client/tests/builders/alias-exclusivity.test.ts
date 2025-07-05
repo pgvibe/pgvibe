@@ -1,12 +1,12 @@
 import { describe, it, expect } from "bun:test";
-import { ZenQ } from "../../src/query-builder";
+import { pgvibe } from "../../src/query-builder";
 import type {
   Database,
   GetColumnReferences,
 } from "../../src/core/shared-types";
 
 describe("Alias Exclusivity Tests", () => {
-  const db = new ZenQ<Database>({
+  const db = new pgvibe<Database>({
     connectionString: "postgresql://test:test@localhost:5432/test",
   });
 

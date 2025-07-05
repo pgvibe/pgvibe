@@ -1,9 +1,9 @@
 import { expect, test, describe } from "bun:test";
-import { ZenQ } from "../../src/query-builder";
+import { pgvibe } from "../../src/query-builder";
 import type { Database } from "../utils/test-types";
 
-// Create ZenQ instance for SQL generation (no real DB connection needed)
-const db = new ZenQ<Database>({
+// Create pgvibe instance for SQL generation (no real DB connection needed)
+const db = new pgvibe<Database>({
   host: "localhost",
   port: 5432,
   database: "test",
