@@ -19,10 +19,12 @@ export interface InsertQueryNode extends OperationNode {
 
 /**
  * INTO clause node for specifying the target table
+ * Now supports table aliases for enhanced INSERT operations
  */
 export interface IntoNode extends OperationNode {
   readonly kind: "IntoNode";
   readonly table: string;
+  readonly alias?: string; // Optional alias for the table (e.g., "users as u")
 }
 
 /**
@@ -97,11 +99,13 @@ export class InsertQueryNode {
 
   /**
    * Creates a new INSERT query node with INTO clause
+   * Now supports table aliases
    */
-  static createWithInto(table: string): InsertQueryNode {
+  static createWithInto(table: string, alias?: string): InsertQueryNode {
     const intoNode: IntoNode = freeze({
       kind: "IntoNode" as const,
       table,
+      ...(alias && { alias }), // Include alias only if provided
     });
 
     return freeze({
@@ -178,15 +182,27 @@ export class InsertQueryNode {
 
   /**
    * Creates a RETURNING node for specific columns
+   * Now supports alias-qualified column references (e.g., "u.id", "users.name")
    */
   static createReturningNode(columns: string[]): ReturningNode {
-    const selections = columns.map(
-      (column): ExpressionNode =>
-        ({
+    const selections = columns.map((column): ExpressionNode => {
+      // Parse column reference to handle table.column format
+      const dotIndex = column.indexOf(".");
+      if (dotIndex > 0) {
+        const table = column.substring(0, dotIndex);
+        const columnName = column.substring(dotIndex + 1);
+        return {
+          kind: "ReferenceNode" as const,
+          table,
+          column: columnName,
+        } as ExpressionNode;
+      } else {
+        return {
           kind: "ReferenceNode" as const,
           column,
-        } as ExpressionNode)
-    );
+        } as ExpressionNode;
+      }
+    });
 
     return freeze({
       kind: "ReturningNode" as const,

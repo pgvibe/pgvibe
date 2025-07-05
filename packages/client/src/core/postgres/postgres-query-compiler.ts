@@ -848,10 +848,17 @@ export class PostgresQueryCompiler {
 
   /**
    * Visit an INTO node
+   * Now supports table aliases (e.g., "INTO users AS u")
    */
   private visitInto(node: IntoNode): void {
     this.append("INTO ");
     this.appendIdentifier(node.table);
+
+    // Add alias if present
+    if (node.alias) {
+      this.append(" AS ");
+      this.appendIdentifier(node.alias);
+    }
   }
 
   /**

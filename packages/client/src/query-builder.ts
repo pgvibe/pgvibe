@@ -29,6 +29,9 @@ import {
   createInsertQueryBuilder,
   type CreateInsertQueryBuilder,
   type InsertQueryBuilder,
+  createAliasedInsertQueryBuilder,
+  type CreateAliasedInsertQueryBuilder,
+  type AliasedInsertQueryBuilder,
 } from "./core/builders/insert-query-builder";
 import { parseTableExpression } from "./core/shared-types";
 
@@ -121,20 +124,33 @@ export class pgvibe<DB> {
 
   /**
    * Start building an INSERT query for the specified table with type-safe column validation
+   * Now supports table aliases with full type safety and alias-qualified column references
    *
-   * @param table - The table name to insert into
-   * @returns An InsertQueryBuilder with type-safe value validation
+   * @param table - The table name to insert into, optionally with alias (e.g., "users as u")
+   * @returns An InsertQueryBuilder with type-safe value validation and alias support
    */
   insertInto<TE extends TableExpression<DB>>(
     table: TE
-  ): CreateInsertQueryBuilder<DB, ExtractTableAlias<DB, TE>> {
-    // Parse the table expression to get the actual table name
-    const { table: tableName } = parseTableExpression(table);
+  ): ExtractAliasName<DB, TE> extends ExtractTableAlias<DB, TE>
+    ? CreateInsertQueryBuilder<DB, ExtractTableAlias<DB, TE>>
+    : CreateAliasedInsertQueryBuilder<DB, TE, ExtractTableAlias<DB, TE>> {
+    // Parse the table expression to get the actual table name and alias
+    const { table: tableName, alias } = parseTableExpression(table);
 
-    return createInsertQueryBuilder<DB, ExtractTableAlias<DB, TE>>(
+    // If no alias is present, use the traditional INSERT query builder
+    if (!alias) {
+      return createInsertQueryBuilder<DB, ExtractTableAlias<DB, TE>>(
+        this.postgres,
+        tableName as ExtractTableAlias<DB, TE> & string
+      ) as any;
+    }
+
+    // If alias is present, use the alias-aware INSERT query builder
+    return createAliasedInsertQueryBuilder<DB, TE, ExtractTableAlias<DB, TE>>(
       this.postgres,
-      tableName as ExtractTableAlias<DB, TE> & string
-    );
+      tableName as ExtractTableAlias<DB, TE> & string,
+      table
+    ) as any;
   }
 
   /**
@@ -272,6 +288,8 @@ export type {
 export type {
   InsertQueryBuilder,
   CreateInsertQueryBuilder,
+  AliasedInsertQueryBuilder,
+  CreateAliasedInsertQueryBuilder,
   InsertResult,
   PrettifiedInsertResult,
   InsertReturningResult,

@@ -4,8 +4,6 @@ This document outlines planned advanced PostgreSQL features for pgvibe after the
 
 ## PostgreSQL Advanced Features
 
-### Alias support
-
 ### Window Functions
 
 - **Window function AST nodes**
