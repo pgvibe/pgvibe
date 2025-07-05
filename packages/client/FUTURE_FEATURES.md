@@ -87,6 +87,16 @@ This document outlines planned advanced PostgreSQL features for pgvibe. The Foun
 
 ### Data Types and Schema
 
+#### Type-Safe Expression Builder
+
+- **Column type-aware expression methods** - Prevent invalid expression builder usage in WHERE clauses
+  - `array()` method only callable on array-typed columns (e.g., `array("tags").overlaps([...])`)
+  - `json()` method only callable on JSON/JSONB-typed columns (e.g., `json("profile").at("email")`)
+  - Compile-time type checking to prevent calling `array("name")` on string columns
+  - Compile-time type checking to prevent calling `json("active")` on boolean columns
+  - Clear TypeScript errors for invalid expression builder method usage
+  - Enhanced WHERE clause type safety based on actual column types
+
 #### Custom Types and Enums
 
 - **PostgreSQL ENUM** type support with TypeScript unions
@@ -133,6 +143,7 @@ This document outlines planned advanced PostgreSQL features for pgvibe. The Foun
 
 #### Advanced Type Features
 
+- **Expression builder type safety** - Restrict array/JSON methods to appropriate column types in WHERE clauses
 - **Schema introspection** from live databases
 - **Type generation** from database schema
 - **Migration-aware types** that update with schema changes
@@ -159,10 +170,11 @@ This document outlines planned advanced PostgreSQL features for pgvibe. The Foun
 
 ### Phase 1: Core Operations (Next Priority)
 
-1. **UPDATE operations** - Complete the CRUD operations suite
-2. **DELETE operations** - Finish basic data manipulation
-3. **Subqueries** - Enable complex query patterns
-4. **Set operations** - UNION, INTERSECT, EXCEPT support
+1. **Type-safe expression builder** - Prevent invalid array/json methods in WHERE clauses
+2. **UPDATE operations** - Complete the CRUD operations suite
+3. **DELETE operations** - Finish basic data manipulation
+4. **Subqueries** - Enable complex query patterns
+5. **Set operations** - UNION, INTERSECT, EXCEPT support
 
 ### Phase 2: Advanced PostgreSQL Features
 

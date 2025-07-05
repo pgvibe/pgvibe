@@ -50,7 +50,7 @@ async function playground() {
     const results = await db
       .selectFrom("users as u")
       .select(["id", "name", "tags"])
-      .where(({ array }) => array("u.tigs").overlaps(["admin", "user"]))
+      .where(({ array }) => array("u.name").overlaps(["admin", "user"]))
       .execute();
 
     // Test 3: Insert with explicit null (should work for nullable fields)
