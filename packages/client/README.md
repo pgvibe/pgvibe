@@ -1,4 +1,4 @@
-# ZenQ
+# pgvibe/client
 
 A PostgreSQL-native TypeScript query builder with advanced type safety and comprehensive PostgreSQL feature support.
 
@@ -33,17 +33,17 @@ A PostgreSQL-native TypeScript query builder with advanced type safety and compr
 ## Installation
 
 ```bash
-npm install zenq
+npm install @pgvibe/client
 # or
-bun install zenq
+bun install @pgvibe/client
 # or
-yarn add zenq
+yarn add @pgvibe/client
 ```
 
 ## Quick Start
 
 ```typescript
-import { createDatabase } from "zenq";
+import { pgvibe } from "@pgvibe/client";
 
 // Define your database schema
 interface Database {
@@ -78,7 +78,7 @@ interface Database {
 }
 
 // Create database connection
-const db = createDatabase<Database>({
+const db = new pgvibe<Database>({
   connectionString: "postgresql://user:password@localhost:5432/mydb",
 });
 ```
@@ -130,7 +130,7 @@ const fullData = await db
 ### Raw SQL for Advanced PostgreSQL Features
 
 ```typescript
-import { sql } from "zenq";
+import { sql } from "@pgvibe/client";
 
 // JSONB operations using raw SQL
 const usersWithDarkTheme = await db
@@ -186,7 +186,7 @@ const qualifiedSelection = await db
 
 ### PostgreSQL-Native Design
 
-ZenQ is built specifically for PostgreSQL, allowing us to:
+pgvibe is built specifically for PostgreSQL, allowing us to:
 
 - **Leverage Full PostgreSQL Power**: Direct access to JSONB, arrays, CTEs, window functions, and more
 - **Optimize for PostgreSQL**: No generic SQL abstraction overhead
@@ -242,7 +242,7 @@ bun run dev
 
 ### Testing
 
-ZenQ includes comprehensive testing across runtime behavior and compile-time type safety:
+pgvibe includes comprehensive testing across runtime behavior and compile-time type safety:
 
 ```bash
 # All tests (runtime + type tests)
@@ -266,7 +266,7 @@ bun run test:watch
 
 #### Type Testing with TSD
 
-ZenQ uses [TSD (TypeScript Definition Testing)](https://github.com/SamVerschueren/tsd) to validate compile-time type safety. This ensures that:
+pgvibe uses [TSD (TypeScript Definition Testing)](https://github.com/SamVerschueren/tsd) to validate compile-time type safety. This ensures that:
 
 - **Type constraints are enforced**: Invalid type combinations are caught at compile time
 - **IntelliSense works correctly**: Proper autocomplete and type hints
@@ -276,9 +276,9 @@ ZenQ uses [TSD (TypeScript Definition Testing)](https://github.com/SamVerschuere
 
 ```typescript
 import { expectType, expectError } from "tsd";
-import { createDatabase } from "zenq";
+import { pgvibe } from "@pgvibe/client";
 
-const db = createDatabase<Database>({
+const db = new pgvibe<Database>({
   connectionString: "postgresql://localhost:5432/test",
 });
 
@@ -337,7 +337,7 @@ The type testing setup uses `tsd` directly with this configuration in `tsd.json`
 }
 ```
 
-This ensures that ZenQ's type system correctly validates queries at compile time, providing excellent developer experience with immediate feedback on type errors.
+This ensures that pgvibe's type system correctly validates queries at compile time, providing excellent developer experience with immediate feedback on type errors.
 
 ### Database Schema
 
@@ -378,7 +378,7 @@ CREATE INDEX idx_posts_search ON posts USING GIN (search_vector);
 
 ### Core Query Builder
 
-- `createDatabase<DB>(config)` - Create database connection
+- `new pgvibe<DB>(config)` - Create database connection
 - `db.selectFrom(table)` - Start SELECT query
 - `.select(columns)` - Select specific columns with type inference
 - `.where(column, operator, value)` - Add WHERE conditions
@@ -401,7 +401,7 @@ CREATE INDEX idx_posts_search ON posts USING GIN (search_vector);
 For advanced PostgreSQL features, use the `sql` template literal:
 
 ```typescript
-import { sql } from "zenq";
+import { sql } from "@pgvibe/client";
 
 // JSONB operations
 .where(sql`metadata->>'key' = ${"value"}`)

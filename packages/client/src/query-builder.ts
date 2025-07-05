@@ -1,4 +1,4 @@
-// Main ZenQ query builder class
+// Main pgvibe query builder class
 // Entry point for the fluent API that provides PostgreSQL-native query building
 
 import type {
@@ -56,12 +56,12 @@ export interface RawQueryResult<T = any> {
 }
 
 /**
- * Main ZenQ class for PostgreSQL database queries
+ * Main pgvibe class for PostgreSQL database queries
  * Provides the starting point for all query building operations
  *
  * @example
  * ```typescript
- * const db = new ZenQ<Database>({
+ * const db = new pgvibe<Database>({
  *   connectionString: 'postgresql://user:password@localhost:5432/mydb'
  * });
  *
@@ -71,7 +71,7 @@ export interface RawQueryResult<T = any> {
  *   .execute();
  * ```
  */
-export class ZenQ<DB> {
+export class pgvibe<DB> {
   private readonly postgres: PostgreSQL;
 
   constructor(config: PostgreSQLConfig) {
@@ -233,12 +233,12 @@ export class ZenQ<DB> {
   }
 
   /**
-   * Destroy the ZenQ instance and clean up database connections
+   * Destroy the pgvibe instance and clean up database connections
    * Call this to allow your script to exit cleanly
    *
    * @example
    * ```typescript
-   * const db = new ZenQ<Database>({
+   * const db = new pgvibe<Database>({
    *   connectionString: 'postgresql://user:password@localhost:5432/mydb'
    * });
    *

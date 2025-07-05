@@ -1,4 +1,4 @@
-// Shared types used across ZenQ core modules
+// Shared types used across pgvibe core modules
 // Contains only the essential types that are actively used
 
 /**

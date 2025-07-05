@@ -1,12 +1,12 @@
-# ZenQ Architecture
+# pgvibe Architecture
 
-A comprehensive architecture document for ZenQ - a PostgreSQL-native TypeScript query builder with type safety and real database execution.
+A comprehensive architecture document for pgvibe - a PostgreSQL-native TypeScript query builder with type safety and real database execution.
 
 ## Table of Contents
 
 - [Executive Summary](#executive-summary)
 - [Core Architecture](#core-architecture)
-- [ZenQ PostgreSQL-Native Approach](#zenq-postgresql-native-approach)
+- [pgvibe PostgreSQL-Native Approach](#pgvibe-postgresql-native-approach)
 - [Technical Implementation](#technical-implementation)
 - [Query Building System](#query-building-system)
 - [PostgreSQL Integration](#postgresql-integration)
@@ -19,7 +19,7 @@ A comprehensive architecture document for ZenQ - a PostgreSQL-native TypeScript 
 
 ### Vision Statement
 
-ZenQ is a **PostgreSQL-native** TypeScript query builder that provides compile-time type safety, immutable query building, and direct PostgreSQL integration. By focusing exclusively on PostgreSQL, ZenQ leverages the full power of PostgreSQL's advanced features without the limitations of multi-database abstraction layers.
+pgvibe is a **PostgreSQL-native** TypeScript query builder that provides compile-time type safety, immutable query building, and direct PostgreSQL integration. By focusing exclusively on PostgreSQL, pgvibe leverages the full power of PostgreSQL's advanced features without the limitations of multi-database abstraction layers.
 
 ### Core Philosophy
 
@@ -42,7 +42,7 @@ ZenQ is a **PostgreSQL-native** TypeScript query builder that provides compile-t
 
 ## Core Architecture
 
-ZenQ follows a streamlined, PostgreSQL-native architecture:
+pgvibe follows a streamlined, PostgreSQL-native architecture:
 
 ```
 ┌─────────────────────────────────────┐
@@ -68,7 +68,7 @@ ZenQ follows a streamlined, PostgreSQL-native architecture:
 - **PostgreSQL Driver**: Native connection management with pooling support
 - **Type System**: Clean PostgreSQL-specific types with advanced operator support
 
-## ZenQ PostgreSQL-Native Approach
+## pgvibe PostgreSQL-Native Approach
 
 ### 1. Direct PostgreSQL Integration
 
@@ -76,7 +76,7 @@ No abstraction layers - direct PostgreSQL implementation:
 
 ```typescript
 // Direct PostgreSQL connection
-const db = new ZenQ<Database>({
+const db = new pgvibe<Database>({
   connectionString: "postgresql://user:password@localhost:5432/mydb",
 });
 
@@ -177,15 +177,15 @@ class SelectQueryBuilderImpl<DB, TB extends keyof DB, O> {
 }
 ```
 
-### ZenQ Query Compilation
+### pgvibe Query Compilation
 
 Enhanced compilation with simple type safety:
 
 ```typescript
-interface ZenQQueryCompiler extends QueryCompiler {
+interface pgvibeQueryCompiler extends QueryCompiler {
   compileQuery<R = unknown>(node: RootOperationNode): CompiledQuery<R>;
 
-  // ZenQ additions - compile-time type safety only
+  // pgvibe additions - compile-time type safety only
   getTableSchema(tableName: string): TableSchema;
   generateTypeScript(schema: DatabaseSchema): TypeScriptDefinitions;
 }
@@ -219,7 +219,7 @@ interface ValidationGenerator {
 
 ### Query Builder
 
-ZenQ's query builder is optimized for PostgreSQL with comprehensive type safety:
+pgvibe's query builder is optimized for PostgreSQL with comprehensive type safety:
 
 ```typescript
 // ✅ Column name safety - prevents typos
@@ -267,11 +267,11 @@ app.post("/users", (req, res) => {
 
 ## PostgreSQL Integration
 
-ZenQ leverages PostgreSQL's advanced features without compromise:
+pgvibe leverages PostgreSQL's advanced features without compromise:
 
 ```typescript
 // Direct PostgreSQL connection
-const db = new ZenQ<Database>({
+const db = new pgvibe<Database>({
   connectionString: "postgresql://user:password@localhost:5432/mydb",
 });
 
@@ -338,12 +338,12 @@ await db
 
 ```typescript
 // Minimal setup required
-const db = new ZenQ<Database>({
+const db = new pgvibe<Database>({
   connectionString: "postgresql://user:password@localhost:5432/mydb",
 });
 
 // Generate types once
-// npx zenq generate
+// npx pgvibe generate
 ```
 
 ### Enhanced IDE Support
