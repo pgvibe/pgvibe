@@ -1,0 +1,90 @@
+name: Test Suite
+
+on:
+  push:
+    branches: [ main, feat/* ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: pgvibe_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+
+    - name: Install Bun
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: latest
+
+    - name: Install dependencies
+      run: bun install
+
+    - name: Install migrations package dependencies
+      run: cd packages/migrations && bun install
+
+    - name: Run core migrations tests
+      run: cd packages/migrations && bun test src/test/tables.test.ts src/test/indexes/ src/test/utils.ts
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/pgvibe_test
+        PGHOST: localhost
+        PGPORT: 5432
+        PGUSER: postgres
+        PGPASSWORD: postgres
+        PGDATABASE: pgvibe_test
+
+    - name: Run constraint tests
+      run: cd packages/migrations && bun run test:constraints
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/pgvibe_test
+        PGHOST: localhost
+        PGPORT: 5432
+        PGUSER: postgres
+        PGPASSWORD: postgres
+        PGDATABASE: pgvibe_test
+
+    - name: Run dependency resolution tests  
+      run: cd packages/migrations && bun run test:dependencies
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/pgvibe_test
+        PGHOST: localhost
+        PGPORT: 5432
+        PGUSER: postgres
+        PGPASSWORD: postgres
+        PGDATABASE: pgvibe_test
+
+    - name: Run destructive operations tests
+      run: cd packages/migrations && bun run test:destructive
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/pgvibe_test
+        PGHOST: localhost
+        PGPORT: 5432
+        PGUSER: postgres
+        PGPASSWORD: postgres
+        PGDATABASE: pgvibe_test
