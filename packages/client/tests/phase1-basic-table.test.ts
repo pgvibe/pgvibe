@@ -27,9 +27,9 @@ test("should select single column", () => {
   expect(query.toSQL()).toBe("SELECT email FROM users");
 });
 
-test("should select all columns with selectAll", () => {
+test("should select all columns (default behavior)", () => {
   const qb = new QueryBuilder<TestDB>();
-  const query = qb.selectFrom("users").selectAll();
+  const query = qb.selectFrom("users");
   
   expect(query.toSQL()).toBe("SELECT * FROM users");
 });

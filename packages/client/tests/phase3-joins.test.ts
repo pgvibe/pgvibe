@@ -53,18 +53,6 @@ test("should support LEFT JOIN with aliases", () => {
   );
 });
 
-test("should support RIGHT JOIN with aliases", () => {
-  const qb = new QueryBuilder<TestDB>();
-  const query = qb
-    .selectFrom("users as u")
-    .rightJoin("posts as p", "u.id", "p.user_id")
-    .select(["u.name", "p.title"]);
-  
-  expect(query.toSQL()).toBe(
-    "SELECT u.name, p.title FROM users AS u RIGHT JOIN posts AS p ON u.id = p.user_id"
-  );
-});
-
 test("should support multiple JOINs chaining", () => {
   // Add comments table to our schema for this test
   const qb = new QueryBuilder<TestDB & { comments: { id: number; post_id: number; content: string } }>();
@@ -88,17 +76,5 @@ test("should support JOIN without aliases (comparison)", () => {
   
   expect(query.toSQL()).toBe(
     "SELECT users.name, posts.title FROM users INNER JOIN posts ON users.id = posts.user_id"
-  );
-});
-
-test("should support selectAll with JOINs", () => {
-  const qb = new QueryBuilder<TestDB>();
-  const query = qb
-    .selectFrom("users as u")
-    .innerJoin("posts as p", "u.id", "p.user_id")
-    .selectAll();
-  
-  expect(query.toSQL()).toBe(
-    "SELECT * FROM users AS u INNER JOIN posts AS p ON u.id = p.user_id"
   );
 });

@@ -1,4 +1,4 @@
-import { qb } from '../src/query-builder-v4.js'
+import { qb } from '../src/index.js'
 
 // Test 1: Basic table selection should work
 const basic = qb.selectFrom('users').select(['id', 'name', 'email'])

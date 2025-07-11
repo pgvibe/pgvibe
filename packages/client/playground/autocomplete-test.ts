@@ -1,4 +1,4 @@
-import { qb } from '../src/query-builder-v5.js'
+import { qb } from '../src/index.js'
 
 // =================================================================
 // 🧪 AUTOCOMPLETE TESTING PLAYGROUND - v5

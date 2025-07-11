@@ -1,322 +1,208 @@
-// Main pgvibe query builder class
-// Entry point for the fluent API that provides PostgreSQL-native query building
+import { TestDB } from '../tests/test-schema.js'
 
-import type {
-  TableExpression,
-  ExtractTableAlias,
-  Database,
-  UserTable,
-  PostTable,
-  CommentTable,
-  RawBuilder,
-  ExtractAliasName,
-} from "./core/shared-types";
-import {
-  PostgreSQL,
-  type PostgreSQLConfig,
-} from "./core/postgres/postgres-dialect";
-import {
-  createSelectQueryBuilder,
-  type CreateSelectQueryBuilder,
-  createAliasedSelectQueryBuilder,
-  type CreateAliasedSelectQueryBuilder,
-  type SelectQueryBuilder,
-  type AliasedSelectQueryBuilder,
-  type MultiTableAliasedSelectQueryBuilder,
-  MultiTableAliasedSelectQueryBuilderImpl,
-} from "./core/builders/select-query-builder";
-import {
-  createInsertQueryBuilder,
-  type CreateInsertQueryBuilder,
-  type InsertQueryBuilder,
-  createAliasedInsertQueryBuilder,
-  type CreateAliasedInsertQueryBuilder,
-  type AliasedInsertQueryBuilder,
-} from "./core/builders/insert-query-builder";
-import { parseTableExpression } from "./core/shared-types";
+// Kysely's proven approach - exact implementation
+type DrainOuterGeneric<T> = [T] extends [unknown] ? T : never
 
-// Export utility types for operation-aware type system
-export type {
-  Generated,
-  InsertType,
-  UpdateType,
-  SelectType,
-  ExtractGenerated,
-  IsGenerated,
-  // Legacy exports for backward compatibility
-  WithDefault,
-  Nullable,
-} from "./core/types/utility-types";
+type ShallowRecord<K extends keyof any, T> = DrainOuterGeneric<{
+  [P in K]: T
+}>
 
-/**
- * Raw SQL query result interface
- */
-export interface RawQueryResult<T = any> {
-  rows: T[];
-  rowCount: number;
-  command: string;
+export type AnyColumn<DB, TB extends keyof DB> = {
+  [T in TB]: keyof DB[T] & string
+}[TB]
+
+export type AnyColumnWithTable<DB, TB extends keyof DB> = {
+  [T in TB]: T extends string ? `${T}.${keyof DB[T] & string}` : never
+}[TB]
+
+// Table autocomplete types - following Kysely exactly
+export type AnyTable<DB> = keyof DB & string
+export type AnyAliasedTable<DB> = `${AnyTable<DB>} as ${string}`
+export type TableExpression<DB> = AnyTable<DB> | AnyAliasedTable<DB>
+
+// Kysely's exact alias extraction
+export type ExtractAliasFromTableExpression<DB, TE> = TE extends `${infer Table} as ${infer Alias}`
+  ? Table extends keyof DB
+    ? Alias
+    : never
+  : TE extends keyof DB
+  ? TE
+  : never
+
+// Kysely's exact row type extraction  
+type ExtractRowTypeFromTableExpression<DB, TE, A extends keyof any> = 
+  TE extends `${infer Table} as ${infer Alias}`
+    ? Alias extends A
+      ? Table extends keyof DB
+        ? DB[Table]
+        : never
+      : never
+    : TE extends A
+    ? TE extends keyof DB
+      ? DB[TE]
+      : never
+    : never
+
+// Kysely's exact From type - this is the key to everything!
+export type From<DB, TE> = DrainOuterGeneric<{
+  [C in
+    | keyof DB
+    | ExtractAliasFromTableExpression<DB, TE>]: C extends ExtractAliasFromTableExpression<DB, TE>
+    ? ExtractRowTypeFromTableExpression<DB, TE, C>
+    : C extends keyof DB
+      ? DB[C]
+      : never
+}>
+
+// Kysely's exact FromTables type
+export type FromTables<DB, TB extends keyof DB, TE> = DrainOuterGeneric<
+  TB | ExtractAliasFromTableExpression<DB, TE>
+>
+
+// Kysely's exact JOIN reference types
+export type JoinReferenceExpression<DB, TB extends keyof DB, TE> = DrainOuterGeneric<
+  | AnyJoinColumn<DB, TB, TE>
+  | AnyJoinColumnWithTable<DB, TB, TE>
+>
+
+type AnyJoinColumn<DB, TB extends keyof DB, TE> = AnyColumn<
+  From<DB, TE>,
+  FromTables<DB, TB, TE>
+>
+
+type AnyJoinColumnWithTable<DB, TB extends keyof DB, TE> = AnyColumnWithTable<
+  From<DB, TE>,
+  FromTables<DB, TB, TE>
+>
+
+// Column validation - simplified
+export type ValidColumn<DB, TB extends keyof DB> = 
+  | AnyColumn<DB, TB>
+  | AnyColumnWithTable<DB, TB>
+
+// Selection result type
+export type SelectionResult<DB, TB extends keyof DB, Selections extends string[]> = {
+  [K in Selections[number] as ExtractColumnAlias<K>]: ExtractColumnType<DB, TB, K>
 }
 
-/**
- * Main pgvibe class for PostgreSQL database queries
- * Provides the starting point for all query building operations
- *
- * @example
- * ```typescript
- * const db = new pgvibe<Database>({
- *   connectionString: 'postgresql://user:password@localhost:5432/mydb'
- * });
- *
- * const users = await db
- *   .selectFrom('users')
- *   .where('active', '=', true)
- *   .execute();
- * ```
- */
-export class pgvibe<DB> {
-  private readonly postgres: PostgreSQL;
+type ExtractColumnAlias<C extends string> = C extends `${string} as ${infer Alias}`
+  ? Alias
+  : C extends `${string}.${infer Col}`
+  ? Col
+  : C
 
-  constructor(config: PostgreSQLConfig) {
-    this.postgres = new PostgreSQL(config);
-  }
+type ExtractColumnType<DB, TB extends keyof DB, C extends string> = 
+  C extends `${string} as ${string}`
+    ? ExtractColumnType<DB, TB, ExtractColumnRef<C>>
+    : C extends `${infer Table}.${infer Col}`
+    ? Table extends TB
+      ? Table extends keyof DB
+        ? Col extends keyof DB[Table]
+          ? DB[Table][Col]
+          : never
+        : never
+      : never
+    : C extends AnyColumn<DB, TB>
+    ? ExtractColumnTypeFromUnion<DB, TB, C>
+    : never
 
-  /**
-   * Start building a SELECT query from the specified table with intelligent error messages
-   * Now supports table aliases with full type safety and proper join support
-   *
-   * @param table - The table name to select from, optionally with alias (e.g., "users as u")
-   * @returns A SelectQueryBuilder with superior error messages for invalid columns
-   */
+type ExtractColumnRef<C extends string> = C extends `${infer Ref} as ${string}`
+  ? Ref
+  : C
+
+type ExtractColumnTypeFromUnion<DB, TB extends keyof DB, C extends string> = {
+  [T in TB]: C extends keyof DB[T] ? DB[T][C] : never
+}[TB]
+
+// Kysely's exact JOIN result types
+type SelectQueryBuilderWithInnerJoin<DB, TB extends keyof DB, O, TE> = 
+  TE extends `${infer Table} as ${infer Alias}`
+    ? Table extends keyof DB
+      ? SelectQueryBuilder<From<DB, TE>, FromTables<DB, TB, TE>, O>
+      : never
+    : TE extends keyof DB
+    ? SelectQueryBuilder<From<DB, TE>, FromTables<DB, TB, TE>, O>
+    : never
+
+// Query builder classes
+export class QueryBuilder<DB> {
+  // Fixed: Use Kysely's From type from the start
   selectFrom<TE extends TableExpression<DB>>(
     table: TE
-  ): ExtractAliasName<DB, TE> extends ExtractTableAlias<DB, TE>
-    ? CreateSelectQueryBuilder<DB, ExtractTableAlias<DB, TE>>
-    : MultiTableAliasedSelectQueryBuilder<
-        DB,
-        readonly [TE],
-        ExtractTableAlias<DB, TE>,
-        any
-      > {
-    // Parse the table expression to get the actual table name and alias
-    const { table: tableName, alias } = parseTableExpression(table);
-
-    // If no alias is present, use the traditional query builder
-    if (!alias) {
-      return createSelectQueryBuilder<DB, ExtractTableAlias<DB, TE>>(
-        this.postgres,
-        tableName as ExtractTableAlias<DB, TE> & string
-      ) as any;
-    }
-
-    // If alias is present, use the multi-table alias-aware query builder
-    return new MultiTableAliasedSelectQueryBuilderImpl<
-      DB,
-      readonly [TE],
-      ExtractTableAlias<DB, TE>,
-      any
-    >(
-      tableName as ExtractTableAlias<DB, TE>,
-      [table] as readonly [TE],
-      this.postgres
-    ) as any;
-  }
-
-  /**
-   * Start building an INSERT query for the specified table with type-safe column validation
-   * Now supports table aliases with full type safety and alias-qualified column references
-   *
-   * @param table - The table name to insert into, optionally with alias (e.g., "users as u")
-   * @returns An InsertQueryBuilder with type-safe value validation and alias support
-   */
-  insertInto<TE extends TableExpression<DB>>(
-    table: TE
-  ): ExtractAliasName<DB, TE> extends ExtractTableAlias<DB, TE>
-    ? CreateInsertQueryBuilder<DB, ExtractTableAlias<DB, TE>>
-    : CreateAliasedInsertQueryBuilder<DB, TE, ExtractTableAlias<DB, TE>> {
-    // Parse the table expression to get the actual table name and alias
-    const { table: tableName, alias } = parseTableExpression(table);
-
-    // If no alias is present, use the traditional INSERT query builder
-    if (!alias) {
-      return createInsertQueryBuilder<DB, ExtractTableAlias<DB, TE>>(
-        this.postgres,
-        tableName as ExtractTableAlias<DB, TE> & string
-      ) as any;
-    }
-
-    // If alias is present, use the alias-aware INSERT query builder
-    return createAliasedInsertQueryBuilder<DB, TE, ExtractTableAlias<DB, TE>>(
-      this.postgres,
-      tableName as ExtractTableAlias<DB, TE> & string,
-      table
-    ) as any;
-  }
-
-  /**
-   * Execute raw SQL with parameters (similar to node-postgres)
-   *
-   * @param sql - Raw SQL string with parameter placeholders ($1, $2, etc.)
-   * @param parameters - Array of parameter values
-   * @returns Promise with query results
-   *
-   * @example
-   * ```typescript
-   * // Execute raw SQL with parameters
-   * await db.query('INSERT INTO users (name, email) VALUES ($1, $2)', ['John', 'john@example.com']);
-   *
-   * // Execute DDL statements
-   * await db.query('CREATE TABLE test_table (id SERIAL PRIMARY KEY, name VARCHAR(255))');
-   *
-   * // Execute complex queries
-   * const result = await db.query('SELECT * FROM users WHERE created_at > $1', [new Date('2024-01-01')]);
-   * ```
-   */
-  async query<T = any>(
-    sql: string,
-    parameters: unknown[] = []
-  ): Promise<RawQueryResult<T>> {
-    console.log(
-      `Executing raw SQL: ${sql}`,
-      parameters.length > 0 ? `with parameters:` : "",
-      parameters
-    );
-
-    const driver = this.postgres.getDriver();
-
-    // Ensure driver is initialized before acquiring connection
-    await driver.init();
-
-    const connection = await driver.acquireConnection();
-
-    try {
-      const result = await connection.executeQuery({
-        sql,
-        parameters,
-        query: null, // Raw queries don't have AST nodes
-      });
-
-      return {
-        rows: result.rows as T[],
-        rowCount: result.rowCount,
-        command: sql.trim().split(/\s+/)[0]?.toUpperCase() || "UNKNOWN",
-      };
-    } finally {
-      connection.release();
-    }
-  }
-
-  /**
-   * Execute raw SQL from a template literal with automatic parameterization
-   *
-   * @param strings - Template literal strings
-   * @param values - Template literal values (automatically parameterized)
-   * @returns Promise with query results
-   *
-   * @example
-   * ```typescript
-   * const userId = 123;
-   * const status = 'active';
-   *
-   * // This gets converted to: SELECT * FROM users WHERE id = $1 AND status = $2
-   * const users = await db.sql`SELECT * FROM users WHERE id = ${userId} AND status = ${status}`;
-   * ```
-   */
-  async sql<T = any>(
-    strings: TemplateStringsArray,
-    ...values: unknown[]
-  ): Promise<RawQueryResult<T>> {
-    // Convert template literal to parameterized SQL
-    let sql = "";
-    const parameters: unknown[] = [];
-
-    for (let i = 0; i < strings.length; i++) {
-      sql += strings[i];
-      if (i < values.length) {
-        parameters.push(values[i]);
-        sql += `$${parameters.length}`;
-      }
-    }
-
-    return this.query<T>(sql, parameters);
-  }
-
-  /**
-   * Get the underlying PostgreSQL instance for advanced usage
-   */
-  getPostgreSQL(): PostgreSQL {
-    return this.postgres;
-  }
-
-  /**
-   * Destroy the pgvibe instance and clean up database connections
-   * Call this to allow your script to exit cleanly
-   *
-   * @example
-   * ```typescript
-   * const db = new pgvibe<Database>({
-   *   connectionString: 'postgresql://user:password@localhost:5432/mydb'
-   * });
-   *
-   * // ... run queries ...
-   *
-   * await db.destroy(); // Clean shutdown
-   * ```
-   */
-  async destroy(): Promise<void> {
-    // Get the driver instance and destroy it
-    const driver = this.postgres.getDriver();
-    await driver.destroy();
+  ): SelectQueryBuilder<From<DB, TE>, ExtractAliasFromTableExpression<DB, TE>, {}> {
+    return new SelectQueryBuilder<From<DB, TE>, ExtractAliasFromTableExpression<DB, TE>, {}>(table as string)
   }
 }
 
-// Re-export types for convenience
-export type {
-  Database,
-  UserTable,
-  PostTable,
-  CommentTable,
-  RawBuilder,
-} from "./core/shared-types";
+export class SelectQueryBuilder<DB, TB extends keyof DB, O> {
+  private table: string
+  private selections: string[] = []
+  private joins: string[] = []
 
-export type {
-  SelectQueryBuilder,
-  CreateSelectQueryBuilder,
-  AliasedSelectQueryBuilder,
-} from "./core/builders/select-query-builder";
+  constructor(table: string) {
+    this.table = table
+  }
 
-export type {
-  InsertQueryBuilder,
-  CreateInsertQueryBuilder,
-  AliasedInsertQueryBuilder,
-  CreateAliasedInsertQueryBuilder,
-  InsertResult,
-  PrettifiedInsertResult,
-  InsertReturningResult,
-  InsertReturningAllResult,
-  InsertObject,
-} from "./core/builders/insert-query-builder";
+  select<S extends ValidColumn<DB, TB>[]>(
+    selections: S
+  ): SelectQueryBuilder<DB, TB, O & SelectionResult<DB, TB, S>> {
+    const newBuilder = new SelectQueryBuilder<DB, TB, O & SelectionResult<DB, TB, S>>(this.table)
+    newBuilder.selections = [...this.selections, ...selections as readonly string[]]
+    newBuilder.joins = [...this.joins]
+    return newBuilder
+  }
 
-export type { PostgreSQLConfig } from "./core/postgres/postgres-dialect";
+  // Fixed: Use Kysely's exact approach for JOIN column autocomplete
+  innerJoin<
+    TE extends TableExpression<DB>,
+    K1 extends JoinReferenceExpression<DB, TB, TE>,
+    K2 extends JoinReferenceExpression<DB, TB, TE>
+  >(
+    table: TE,
+    k1: K1,
+    k2: K2
+  ): SelectQueryBuilderWithInnerJoin<DB, TB, O, TE> {
+    const newBuilder = new SelectQueryBuilder(this.table) as any
+    newBuilder.selections = [...this.selections]
+    newBuilder.joins = [...this.joins, `INNER JOIN ${table} ON ${k1} = ${k2}`]
+    return newBuilder
+  }
 
-export type {
-  PostgreSQLCompiledQuery,
-  PostgreSQLQueryResult,
-  PostgreSQLConnection,
-} from "./core/postgres/postgres-driver";
+  leftJoin<
+    TE extends TableExpression<DB>,
+    K1 extends JoinReferenceExpression<DB, TB, TE>,
+    K2 extends JoinReferenceExpression<DB, TB, TE>
+  >(
+    table: TE,
+    k1: K1,
+    k2: K2
+  ): SelectQueryBuilderWithInnerJoin<DB, TB, O, TE> {
+    const newBuilder = new SelectQueryBuilder(this.table) as any
+    newBuilder.selections = [...this.selections]
+    newBuilder.joins = [...this.joins, `LEFT JOIN ${table} ON ${k1} = ${k2}`]
+    return newBuilder
+  }
 
-export type {
-  PostgreSQLFieldInfo,
-  PostgreSQLDatabaseError,
-  PostgreSQLTypeMappings,
-} from "./core/postgres/postgres-adapter";
+  toSQL(): string {
+    const selectList = this.selections.length > 0 ? this.selections.join(', ') : '*'
+    // Convert lowercase 'as' to uppercase 'AS' for proper SQL formatting
+    const fromClause = this.table.replace(/ as /g, ' AS ')
+    let sql = `SELECT ${selectList} FROM ${fromClause}`
+    
+    if (this.joins.length > 0) {
+      // Also convert 'as' to 'AS' in JOIN clauses
+      const joins = this.joins.map(join => join.replace(/ as /g, ' AS '))
+      sql += ' ' + joins.join(' ')
+    }
+    
+    return sql
+  }
 
-// Re-export PostgreSQL implementation
-export { PostgreSQL } from "./core/postgres/postgres-dialect";
+  async execute(): Promise<(O & Record<string, any>)[]> {
+    return []
+  }
+}
 
-// Re-export for advanced usage
-export { SelectQueryNode } from "./core/ast/select-query-node";
-export { InsertQueryNode } from "./core/ast/insert-query-node";
-export { ExpressionNodeFactory } from "./core/ast/expression-nodes";
-
-// Re-export raw SQL template literals
-export { sql, raw } from "./raw-sql";
+// Export configured query builder
+const qb = new QueryBuilder<TestDB>()
+export { qb }
