@@ -3,6 +3,9 @@ import type {
   Column,
   PrimaryKeyConstraint,
   Index,
+  CheckConstraint,
+  ForeignKeyConstraint,
+  UniqueConstraint,
 } from "../../types/schema";
 import type { MigrationPlan, MigrationOptions } from "../../types/migration";
 import { DEFAULT_MIGRATION_OPTIONS } from "../../types/migration";
@@ -12,6 +15,12 @@ import {
   normalizeType,
   generateAddPrimaryKeySQL,
   generateDropPrimaryKeySQL,
+  generateAddCheckConstraintSQL,
+  generateDropCheckConstraintSQL,
+  generateAddForeignKeySQL,
+  generateDropForeignKeySQL,
+  generateAddUniqueConstraintSQL,
+  generateDropUniqueConstraintSQL,
 } from "../../utils/sql";
 
 export class SchemaDiffer {
@@ -66,6 +75,13 @@ export class SchemaDiffer {
           currentTable
         );
         statements.push(...indexStatements);
+
+        // 5. Handle constraint changes (check, foreign key, unique)
+        const constraintStatements = this.generateConstraintStatements(
+          table,
+          currentTable
+        );
+        statements.push(...constraintStatements);
       }
     }
 
@@ -80,6 +96,21 @@ export class SchemaDiffer {
           table.indexes
         );
         statements.push(...newTableIndexStatements);
+      }
+    }
+
+    // Handle constraints for new tables (created after table creation)
+    for (const table of desiredSchema) {
+      if (!currentTables.has(table.name)) {
+        // Generate foreign key constraints
+        if (table.foreignKeys && table.foreignKeys.length > 0) {
+          for (const fk of table.foreignKeys) {
+            statements.push(generateAddForeignKeySQL(table.name, fk));
+          }
+        }
+        
+        // Note: Check and unique constraints are already included in CREATE TABLE
+        // Only foreign keys need to be added separately
       }
     }
 
@@ -643,5 +674,203 @@ export class SchemaDiffer {
     }
 
     return sql + ";";
+  }
+
+  private generateConstraintStatements(
+    desiredTable: Table,
+    currentTable: Table
+  ): string[] {
+    const statements: string[] = [];
+
+    // Handle check constraints
+    const checkStatements = this.generateCheckConstraintStatements(
+      desiredTable.name,
+      desiredTable.checkConstraints || [],
+      currentTable.checkConstraints || []
+    );
+    statements.push(...checkStatements);
+
+    // Handle foreign key constraints
+    const foreignKeyStatements = this.generateForeignKeyStatements(
+      desiredTable.name,
+      desiredTable.foreignKeys || [],
+      currentTable.foreignKeys || []
+    );
+    statements.push(...foreignKeyStatements);
+
+    // Handle unique constraints
+    const uniqueStatements = this.generateUniqueConstraintStatements(
+      desiredTable.name,
+      desiredTable.uniqueConstraints || [],
+      currentTable.uniqueConstraints || []
+    );
+    statements.push(...uniqueStatements);
+
+    return statements;
+  }
+
+  private generateCheckConstraintStatements(
+    tableName: string,
+    desiredConstraints: CheckConstraint[],
+    currentConstraints: CheckConstraint[]
+  ): string[] {
+    const statements: string[] = [];
+
+    // Create maps for easier comparison
+    const currentMap = new Map(
+      currentConstraints.map(c => [c.name || c.expression, c])
+    );
+    const desiredMap = new Map(
+      desiredConstraints.map(c => [c.name || c.expression, c])
+    );
+
+    // Drop removed constraints
+    for (const [key, constraint] of currentMap) {
+      if (!desiredMap.has(key)) {
+        if (constraint.name) {
+          statements.push(generateDropCheckConstraintSQL(tableName, constraint.name));
+        }
+      }
+    }
+
+    // Add new constraints
+    for (const [key, constraint] of desiredMap) {
+      if (!currentMap.has(key)) {
+        statements.push(generateAddCheckConstraintSQL(tableName, constraint));
+      } else {
+        // Check if the constraint has changed (expression is different)
+        const currentConstraint = currentMap.get(key)!;
+        if (constraint.expression !== currentConstraint.expression) {
+          // Drop and recreate
+          if (currentConstraint.name) {
+            statements.push(generateDropCheckConstraintSQL(tableName, currentConstraint.name));
+          }
+          statements.push(generateAddCheckConstraintSQL(tableName, constraint));
+        }
+      }
+    }
+
+    return statements;
+  }
+
+  private generateForeignKeyStatements(
+    tableName: string,
+    desiredConstraints: ForeignKeyConstraint[],
+    currentConstraints: ForeignKeyConstraint[]
+  ): string[] {
+    const statements: string[] = [];
+
+    // Create maps for easier comparison
+    const currentMap = new Map(
+      currentConstraints.map(c => [
+        c.name || `fk_${c.columns.join('_')}_${c.referencedTable}`,
+        c
+      ])
+    );
+    const desiredMap = new Map(
+      desiredConstraints.map(c => [
+        c.name || `fk_${c.columns.join('_')}_${c.referencedTable}`,
+        c
+      ])
+    );
+
+    // Drop removed constraints
+    for (const [key, constraint] of currentMap) {
+      if (!desiredMap.has(key)) {
+        if (constraint.name) {
+          statements.push(generateDropForeignKeySQL(tableName, constraint.name));
+        }
+      }
+    }
+
+    // Add new constraints or modify existing ones
+    for (const [key, constraint] of desiredMap) {
+      if (!currentMap.has(key)) {
+        statements.push(generateAddForeignKeySQL(tableName, constraint));
+      } else {
+        // Check if the constraint has changed
+        const currentConstraint = currentMap.get(key)!;
+        if (this.foreignKeysDiffer(constraint, currentConstraint)) {
+          // Drop and recreate to modify
+          if (currentConstraint.name) {
+            statements.push(generateDropForeignKeySQL(tableName, currentConstraint.name));
+          }
+          statements.push(generateAddForeignKeySQL(tableName, constraint));
+        }
+      }
+    }
+
+    return statements;
+  }
+
+  private foreignKeysDiffer(a: ForeignKeyConstraint, b: ForeignKeyConstraint): boolean {
+    // Check if columns differ
+    if (a.columns.length !== b.columns.length ||
+        !a.columns.every((col, i) => col === b.columns[i])) {
+      return true;
+    }
+
+    // Check if referenced columns differ
+    if (a.referencedColumns.length !== b.referencedColumns.length ||
+        !a.referencedColumns.every((col, i) => col === b.referencedColumns[i])) {
+      return true;
+    }
+
+    // Check if referenced table differs
+    if (a.referencedTable !== b.referencedTable) {
+      return true;
+    }
+
+    // Check if action clauses differ
+    if (a.onDelete !== b.onDelete || a.onUpdate !== b.onUpdate) {
+      return true;
+    }
+
+    // Check if deferrable settings differ
+    if (a.deferrable !== b.deferrable || a.initiallyDeferred !== b.initiallyDeferred) {
+      return true;
+    }
+
+    return false;
+  }
+
+  private generateUniqueConstraintStatements(
+    tableName: string,
+    desiredConstraints: UniqueConstraint[],
+    currentConstraints: UniqueConstraint[]
+  ): string[] {
+    const statements: string[] = [];
+
+    // Create maps for easier comparison
+    const currentMap = new Map(
+      currentConstraints.map(c => [
+        c.name || `unique_${c.columns.join('_')}`,
+        c
+      ])
+    );
+    const desiredMap = new Map(
+      desiredConstraints.map(c => [
+        c.name || `unique_${c.columns.join('_')}`,
+        c
+      ])
+    );
+
+    // Drop removed constraints
+    for (const [key, constraint] of currentMap) {
+      if (!desiredMap.has(key)) {
+        if (constraint.name) {
+          statements.push(generateDropUniqueConstraintSQL(tableName, constraint.name));
+        }
+      }
+    }
+
+    // Add new constraints
+    for (const [key, constraint] of desiredMap) {
+      if (!currentMap.has(key)) {
+        statements.push(generateAddUniqueConstraintSQL(tableName, constraint));
+      }
+    }
+
+    return statements;
   }
 }

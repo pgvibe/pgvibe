@@ -3,6 +3,9 @@ import type {
   Table,
   Column,
   PrimaryKeyConstraint,
+  ForeignKeyConstraint,
+  CheckConstraint,
+  UniqueConstraint,
   Index,
 } from "../../types/schema";
 
@@ -58,6 +61,15 @@ export class DatabaseInspector {
       // Get primary key constraint for this table
       const primaryKey = await this.getPrimaryKeyConstraint(client, tableName);
 
+      // Get foreign key constraints for this table
+      const foreignKeys = await this.getForeignKeyConstraints(client, tableName);
+
+      // Get check constraints for this table
+      const checkConstraints = await this.getCheckConstraints(client, tableName);
+
+      // Get unique constraints for this table
+      const uniqueConstraints = await this.getUniqueConstraints(client, tableName);
+
       // Get indexes for this table
       const indexes = await this.getTableIndexes(client, tableName);
 
@@ -65,6 +77,9 @@ export class DatabaseInspector {
         name: tableName,
         columns,
         primaryKey,
+        foreignKeys: foreignKeys.length > 0 ? foreignKeys : undefined,
+        checkConstraints: checkConstraints.length > 0 ? checkConstraints : undefined,
+        uniqueConstraints: uniqueConstraints.length > 0 ? uniqueConstraints : undefined,
         indexes,
       });
     }
@@ -231,5 +246,178 @@ export class DatabaseInspector {
       default:
         return "btree"; // Default fallback
     }
+  }
+
+  async getForeignKeyConstraints(client: Client, tableName: string): Promise<ForeignKeyConstraint[]> {
+    const result = await client.query(
+      `
+      SELECT 
+        tc.constraint_name,
+        kcu.column_name,
+        ccu.table_name AS referenced_table,
+        ccu.column_name AS referenced_column,
+        rc.delete_rule,
+        rc.update_rule
+      FROM information_schema.table_constraints tc
+      JOIN information_schema.key_column_usage kcu 
+        ON tc.constraint_name = kcu.constraint_name
+      JOIN information_schema.constraint_column_usage ccu 
+        ON ccu.constraint_name = tc.constraint_name
+      JOIN information_schema.referential_constraints rc
+        ON rc.constraint_name = tc.constraint_name
+      WHERE tc.table_name = $1 
+        AND tc.table_schema = 'public'
+        AND tc.constraint_type = 'FOREIGN KEY'
+      ORDER BY tc.constraint_name, kcu.ordinal_position
+      `,
+      [tableName]
+    );
+
+    if (result.rows.length === 0) {
+      return [];
+    }
+
+    // Group foreign key constraints by constraint name
+    const constraintGroups = new Map<string, any[]>();
+    
+    for (const row of result.rows) {
+      const constraintName = row.constraint_name;
+      if (!constraintGroups.has(constraintName)) {
+        constraintGroups.set(constraintName, []);
+      }
+      constraintGroups.get(constraintName)!.push(row);
+    }
+
+    const foreignKeys: ForeignKeyConstraint[] = [];
+
+    for (const [constraintName, rows] of constraintGroups) {
+      const firstRow = rows[0];
+      
+      // Extract columns and referenced columns (maintaining order)
+      const columns = rows.map(row => row.column_name);
+      const referencedColumns = rows.map(row => row.referenced_column);
+      
+      // Map PostgreSQL action rules to our types
+      const onDelete = this.mapReferentialAction(firstRow.delete_rule);
+      const onUpdate = this.mapReferentialAction(firstRow.update_rule);
+
+      foreignKeys.push({
+        name: constraintName,
+        columns,
+        referencedTable: firstRow.referenced_table,
+        referencedColumns,
+        onDelete,
+        onUpdate,
+      });
+    }
+
+    return foreignKeys;
+  }
+
+  private mapReferentialAction(rule: string | null): 'CASCADE' | 'RESTRICT' | 'SET NULL' | 'SET DEFAULT' | undefined {
+    if (!rule) return undefined;
+    
+    switch (rule.toUpperCase()) {
+      case 'CASCADE':
+        return 'CASCADE';
+      case 'RESTRICT':
+        return 'RESTRICT';
+      case 'SET NULL':
+        return 'SET NULL';
+      case 'SET DEFAULT':
+        return 'SET DEFAULT';
+      default:
+        return undefined;
+    }
+  }
+
+  async getCheckConstraints(client: Client, tableName: string): Promise<CheckConstraint[]> {
+    const result = await client.query(
+      `
+      SELECT 
+        conname as constraint_name,
+        pg_get_constraintdef(c.oid) as constraint_def
+      FROM pg_constraint c
+      JOIN pg_class t ON c.conrelid = t.oid
+      WHERE t.relname = $1 
+        AND t.relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+        AND c.contype = 'c'
+      ORDER BY c.conname
+      `,
+      [tableName]
+    );
+
+    if (result.rows.length === 0) {
+      return [];
+    }
+
+    const checkConstraints: CheckConstraint[] = [];
+
+    for (const row of result.rows) {
+      const constraintName = row.constraint_name;
+      const constraintDef = row.constraint_def;
+      
+      // Extract the expression from the constraint definition
+      // PostgreSQL returns format like "CHECK (expression)"
+      const match = constraintDef.match(/^CHECK \((.+)\)$/);
+      if (match) {
+        const expression = match[1];
+        
+        checkConstraints.push({
+          name: constraintName,
+          expression,
+        });
+      }
+    }
+
+    return checkConstraints;
+  }
+
+  async getUniqueConstraints(client: Client, tableName: string): Promise<UniqueConstraint[]> {
+    const result = await client.query(
+      `
+      SELECT 
+        tc.constraint_name,
+        kcu.column_name,
+        kcu.ordinal_position
+      FROM information_schema.table_constraints tc
+      JOIN information_schema.key_column_usage kcu 
+        ON tc.constraint_name = kcu.constraint_name
+      WHERE tc.table_name = $1 
+        AND tc.table_schema = 'public'
+        AND tc.constraint_type = 'UNIQUE'
+      ORDER BY tc.constraint_name, kcu.ordinal_position
+      `,
+      [tableName]
+    );
+
+    if (result.rows.length === 0) {
+      return [];
+    }
+
+    // Group unique constraints by constraint name
+    const constraintGroups = new Map<string, any[]>();
+    
+    for (const row of result.rows) {
+      const constraintName = row.constraint_name;
+      if (!constraintGroups.has(constraintName)) {
+        constraintGroups.set(constraintName, []);
+      }
+      constraintGroups.get(constraintName)!.push(row);
+    }
+
+    const uniqueConstraints: UniqueConstraint[] = [];
+
+    for (const [constraintName, rows] of constraintGroups) {
+      // Extract columns (maintaining order)
+      const columns = rows.map(row => row.column_name);
+
+      uniqueConstraints.push({
+        name: constraintName,
+        columns,
+      });
+    }
+
+    return uniqueConstraints;
   }
 }
