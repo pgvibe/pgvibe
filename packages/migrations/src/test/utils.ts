@@ -3,7 +3,7 @@ import type { DatabaseConfig } from "../types/config";
 
 export const TEST_DB_CONFIG: DatabaseConfig = {
   host: "localhost",
-  port: 5433,
+  port: 5487,
   database: "sql_terraform_test",
   user: "test_user",
   password: "test_password",
