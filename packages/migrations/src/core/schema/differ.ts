@@ -114,22 +114,10 @@ export class SchemaDiffer {
       }
     }
 
-    // Handle dropped tables - drop all FK constraints first, then tables
+    // Handle dropped tables - constraint changes are handled above, just drop tables
     const tablesToDrop = currentSchema.filter(table => !desiredTables.has(table.name));
-    if (tablesToDrop.length > 0) {
-      // First, drop all foreign key constraints to remove dependencies
-      for (const table of tablesToDrop) {
-        if (table.foreignKeys && table.foreignKeys.length > 0) {
-          for (const fk of table.foreignKeys) {
-            statements.push(generateDropForeignKeySQL(table.name, fk.name || `fk_${table.name}_${fk.columns.join('_')}`));
-          }
-        }
-      }
-      
-      // Then drop all tables (order doesn't matter since FKs are gone)
-      for (const table of tablesToDrop) {
-        statements.push(`DROP TABLE ${table.name};`);
-      }
+    for (const table of tablesToDrop) {
+      statements.push(`DROP TABLE ${table.name} CASCADE;`);
     }
 
     // Separate statements into transactional and concurrent
