@@ -77,6 +77,8 @@ export class SchemaParser {
             if (index) {
               indexes.push(index);
             }
+          } else if (statement.type === "alter_table_stmt") {
+            this.parseAlterTableFromCST(statement, tables);
           }
         }
       }
@@ -927,6 +929,76 @@ export class SchemaParser {
 
     // No primary key found
     return undefined;
+  }
+
+  // ALTER TABLE parsing
+  private parseAlterTableFromCST(node: any, tables: Table[]): void {
+    try {
+      // Extract table name
+      const tableName = node.table?.name || node.table?.text;
+      if (!tableName) {
+        Logger.warning("⚠️ ALTER TABLE statement missing table name");
+        return;
+      }
+
+      // Find the table in our existing tables
+      const table = tables.find(t => t.name === tableName);
+      if (!table) {
+        // Table might be created in a different schema file or might not exist yet
+        // For now, we'll skip ALTER TABLE for non-existent tables
+        Logger.warning(`⚠️ ALTER TABLE references table "${tableName}" which doesn't exist in current schema`);
+        return;
+      }
+
+      // Process ALTER TABLE actions
+      if (node.actions?.items) {
+        for (const action of node.actions.items) {
+          if (action.type === "alter_action_add_constraint") {
+            // Handle ADD CONSTRAINT
+            const constraint = action.constraint;
+            if (constraint?.type === "constraint_foreign_key") {
+              // Parse foreign key constraint
+              const fk = this.parseForeignKeyConstraintFromCST(constraint);
+              if (fk) {
+                // Set the constraint name from the ALTER TABLE statement
+                if (action.name?.name?.name || action.name?.name?.text) {
+                  fk.name = action.name?.name?.name || action.name?.name?.text;
+                }
+                if (!table.foreignKeys) {
+                  table.foreignKeys = [];
+                }
+                table.foreignKeys.push(fk);
+              }
+            } else if (constraint?.type === "constraint_check") {
+              // Parse check constraint
+              const check = this.parseCheckConstraintFromCST(constraint);
+              if (check) {
+                if (!table.checkConstraints) {
+                  table.checkConstraints = [];
+                }
+                table.checkConstraints.push(check);
+              }
+            } else if (constraint?.type === "constraint_unique") {
+              // Parse unique constraint
+              const unique = this.parseUniqueConstraintFromCST(constraint);
+              if (unique) {
+                if (!table.uniqueConstraints) {
+                  table.uniqueConstraints = [];
+                }
+                table.uniqueConstraints.push(unique);
+              }
+            }
+          }
+          // We could handle other ALTER TABLE actions here (DROP CONSTRAINT, ADD COLUMN, etc.)
+        }
+      }
+    } catch (error) {
+      Logger.warning(
+        `⚠️ Failed to parse ALTER TABLE statement: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
   }
 
   // Index parsing methods
