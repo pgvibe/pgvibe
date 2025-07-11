@@ -353,28 +353,23 @@ describe("Foreign Key Constraints", () => {
     });
 
     test("should handle circular foreign key dependencies", async () => {
+      // For circular dependencies, use inline constraint syntax
       const schema = `
         CREATE TABLE employees (
           id SERIAL PRIMARY KEY,
           name VARCHAR(100) NOT NULL,
           manager_id INTEGER,
-          department_id INTEGER
+          department_id INTEGER,
+          CONSTRAINT fk_manager FOREIGN KEY (manager_id) REFERENCES employees(id),
+          CONSTRAINT fk_department FOREIGN KEY (department_id) REFERENCES departments(id)
         );
 
         CREATE TABLE departments (
           id SERIAL PRIMARY KEY,
           name VARCHAR(100) NOT NULL,
-          head_employee_id INTEGER
+          head_employee_id INTEGER,
+          CONSTRAINT fk_head FOREIGN KEY (head_employee_id) REFERENCES employees(id)
         );
-
-        ALTER TABLE employees 
-          ADD CONSTRAINT fk_manager FOREIGN KEY (manager_id) REFERENCES employees(id);
-        
-        ALTER TABLE employees 
-          ADD CONSTRAINT fk_department FOREIGN KEY (department_id) REFERENCES departments(id);
-        
-        ALTER TABLE departments 
-          ADD CONSTRAINT fk_head FOREIGN KEY (head_employee_id) REFERENCES employees(id);
       `;
 
       await schemaService.apply(schema);
