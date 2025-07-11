@@ -77,6 +77,19 @@ export class SchemaParser {
             if (index) {
               indexes.push(index);
             }
+          } else if (statement.type === "alter_table_stmt") {
+            throw new Error(
+              "ALTER TABLE statements are not supported in schema definitions. " +
+              "PgVibe is a declarative schema tool - please define your complete desired schema " +
+              "using CREATE TABLE statements with inline constraints. " +
+              "For circular foreign keys, use inline CONSTRAINT syntax."
+            );
+          } else if (statement.type === "drop_table_stmt" || statement.type === "drop_index_stmt") {
+            throw new Error(
+              "DROP statements are not supported in schema definitions. " +
+              "PgVibe is a declarative schema tool - only include the tables and indexes " +
+              "you want to exist. PgVibe will automatically determine what needs to be dropped."
+            );
           }
         }
       }
