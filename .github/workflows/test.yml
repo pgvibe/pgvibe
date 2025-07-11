@@ -1,0 +1,68 @@
+name: Test Suite
+
+on:
+  push:
+    branches: [ main, feat/* ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: sql_terraform_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        options: >-
+          --health-cmd "pg_isready -U test_user -d sql_terraform_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5487:5432
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Bun
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: latest
+
+    - name: Install dependencies
+      run: bun install
+
+    - name: Install migrations package dependencies
+      run: cd packages/migrations && bun install
+
+    - name: Install PostgreSQL client
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y postgresql-client
+
+    - name: Wait for PostgreSQL
+      run: |
+        for i in {1..30}; do
+          if pg_isready -h localhost -p 5487 -U test_user -d sql_terraform_test; then
+            echo "PostgreSQL is ready!"
+            break
+          fi
+          echo "Waiting for PostgreSQL... ($i/30)"
+          sleep 2
+        done
+
+    - name: Run core migrations tests
+      run: cd packages/migrations && bun test src/test/tables.test.ts src/test/indexes/ src/test/utils.ts
+
+    - name: Run constraint tests
+      run: cd packages/migrations && bun run test:constraints
+
+    - name: Run dependency resolution tests  
+      run: cd packages/migrations && bun run test:dependencies
+
+    - name: Run destructive operations tests
+      run: cd packages/migrations && bun run test:destructive

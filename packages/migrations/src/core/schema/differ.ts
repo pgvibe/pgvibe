@@ -77,7 +77,8 @@ export class SchemaDiffer {
         statements.push(...indexStatements);
 
         // 5. Handle constraint changes (check, foreign key, unique)
-        const constraintStatements = this.generateConstraintStatements(
+        // Note: Skip explicit FK constraint drops if they'll be auto-dropped by column changes
+        const constraintStatements = this.generateConstraintStatementsWithColumnContext(
           table,
           currentTable
         );
@@ -114,11 +115,10 @@ export class SchemaDiffer {
       }
     }
 
-    // Handle dropped tables
-    for (const table of currentSchema) {
-      if (!desiredTables.has(table.name)) {
-        statements.push(`DROP TABLE ${table.name};`);
-      }
+    // Handle dropped tables - constraint changes are handled above, just drop tables
+    const tablesToDrop = currentSchema.filter(table => !desiredTables.has(table.name));
+    for (const table of tablesToDrop) {
+      statements.push(`DROP TABLE ${table.name} CASCADE;`);
     }
 
     // Separate statements into transactional and concurrent
@@ -676,11 +676,16 @@ export class SchemaDiffer {
     return sql + ";";
   }
 
-  private generateConstraintStatements(
+  private generateConstraintStatementsWithColumnContext(
     desiredTable: Table,
     currentTable: Table
   ): string[] {
     const statements: string[] = [];
+
+    // Identify dropped columns - these will auto-drop dependent constraints
+    const currentColumns = new Set(currentTable.columns.map(c => c.name));
+    const desiredColumns = new Set(desiredTable.columns.map(c => c.name));
+    const droppedColumns = new Set([...currentColumns].filter(col => !desiredColumns.has(col)));
 
     // Handle check constraints
     const checkStatements = this.generateCheckConstraintStatements(
@@ -690,11 +695,12 @@ export class SchemaDiffer {
     );
     statements.push(...checkStatements);
 
-    // Handle foreign key constraints
+    // Handle foreign key constraints (skip those that reference dropped columns)
     const foreignKeyStatements = this.generateForeignKeyStatements(
       desiredTable.name,
       desiredTable.foreignKeys || [],
-      currentTable.foreignKeys || []
+      currentTable.foreignKeys || [],
+      droppedColumns
     );
     statements.push(...foreignKeyStatements);
 
@@ -756,7 +762,8 @@ export class SchemaDiffer {
   private generateForeignKeyStatements(
     tableName: string,
     desiredConstraints: ForeignKeyConstraint[],
-    currentConstraints: ForeignKeyConstraint[]
+    currentConstraints: ForeignKeyConstraint[],
+    droppedColumns: Set<string> = new Set()
   ): string[] {
     const statements: string[] = [];
 
@@ -774,10 +781,14 @@ export class SchemaDiffer {
       ])
     );
 
-    // Drop removed constraints
+    // Drop removed constraints (but skip those that will be auto-dropped by column removal)
     for (const [key, constraint] of currentMap) {
       if (!desiredMap.has(key)) {
-        if (constraint.name) {
+        // Check if this constraint depends on columns being dropped
+        const dependsOnDroppedColumn = constraint.columns.some(col => droppedColumns.has(col));
+        
+        if (!dependsOnDroppedColumn && constraint.name) {
+          // Only explicitly drop if it won't be auto-dropped by column removal
           statements.push(generateDropForeignKeySQL(tableName, constraint.name));
         }
       }

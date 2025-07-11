@@ -77,6 +77,11 @@ export class SchemaService {
   }
 
   private parseSchemaInput(input: string) {
+    // Handle empty string as empty SQL content (not a filename)
+    if (input === "") {
+      return this.parser.parseSchema(input);
+    }
+    
     // Simple heuristic: if the input contains SQL keywords and is longer than a typical file path,
     // or contains newlines/semicolons, treat it as SQL content rather than a file path
     if (
