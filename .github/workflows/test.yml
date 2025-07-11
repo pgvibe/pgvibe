@@ -12,18 +12,18 @@ jobs:
 
     services:
       postgres:
-        image: postgres:15
+        image: postgres:15-alpine
         env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_USER: postgres
-          POSTGRES_DB: pgvibe_test
+          POSTGRES_DB: sql_terraform_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
         options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
+          --health-cmd "pg_isready -U test_user -d sql_terraform_test"
+          --health-interval 5s
           --health-timeout 5s
           --health-retries 5
         ports:
-          - 5432:5432
+          - 5487:5432
 
     strategy:
       matrix:
@@ -49,42 +49,30 @@ jobs:
     - name: Install migrations package dependencies
       run: cd packages/migrations && bun install
 
+    - name: Install PostgreSQL client
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y postgresql-client
+
+    - name: Wait for PostgreSQL
+      run: |
+        for i in {1..30}; do
+          if pg_isready -h localhost -p 5487 -U test_user -d sql_terraform_test; then
+            echo "PostgreSQL is ready!"
+            break
+          fi
+          echo "Waiting for PostgreSQL... ($i/30)"
+          sleep 2
+        done
+
     - name: Run core migrations tests
       run: cd packages/migrations && bun test src/test/tables.test.ts src/test/indexes/ src/test/utils.ts
-      env:
-        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/pgvibe_test
-        PGHOST: localhost
-        PGPORT: 5432
-        PGUSER: postgres
-        PGPASSWORD: postgres
-        PGDATABASE: pgvibe_test
 
     - name: Run constraint tests
       run: cd packages/migrations && bun run test:constraints
-      env:
-        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/pgvibe_test
-        PGHOST: localhost
-        PGPORT: 5432
-        PGUSER: postgres
-        PGPASSWORD: postgres
-        PGDATABASE: pgvibe_test
 
     - name: Run dependency resolution tests  
       run: cd packages/migrations && bun run test:dependencies
-      env:
-        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/pgvibe_test
-        PGHOST: localhost
-        PGPORT: 5432
-        PGUSER: postgres
-        PGPASSWORD: postgres
-        PGDATABASE: pgvibe_test
 
     - name: Run destructive operations tests
       run: cd packages/migrations && bun run test:destructive
-      env:
-        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/pgvibe_test
-        PGHOST: localhost
-        PGPORT: 5432
-        PGUSER: postgres
-        PGPASSWORD: postgres
-        PGDATABASE: pgvibe_test
