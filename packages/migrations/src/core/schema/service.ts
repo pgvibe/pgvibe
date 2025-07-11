@@ -28,7 +28,7 @@ export class SchemaService {
     const client = await this.databaseService.createClient();
 
     try {
-      const desiredSchema = this.parser.parseSchemaFile(schemaFile);
+      const desiredSchema = this.parseSchemaInput(schemaFile);
       const currentSchema = await this.inspector.getCurrentSchema(client);
       const plan = this.planner.generatePlan(desiredSchema, currentSchema);
 
@@ -66,13 +66,28 @@ export class SchemaService {
     const client = await this.databaseService.createClient();
 
     try {
-      const desiredSchema = this.parser.parseSchemaFile(schemaFile);
+      const desiredSchema = this.parseSchemaInput(schemaFile);
       const currentSchema = await this.inspector.getCurrentSchema(client);
       const plan = this.planner.generatePlan(desiredSchema, currentSchema);
 
       await this.executor.executePlan(client, plan);
     } finally {
       await client.end();
+    }
+  }
+
+  private parseSchemaInput(input: string) {
+    // Simple heuristic: if the input contains SQL keywords and is longer than a typical file path,
+    // or contains newlines/semicolons, treat it as SQL content rather than a file path
+    if (
+      input.includes('CREATE') || 
+      input.includes(';') || 
+      input.includes('\n') || 
+      input.length > 500
+    ) {
+      return this.parser.parseSchema(input);
+    } else {
+      return this.parser.parseSchemaFile(input);
     }
   }
 }

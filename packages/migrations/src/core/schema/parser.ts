@@ -4,6 +4,9 @@ import type {
   Table,
   Column,
   PrimaryKeyConstraint,
+  ForeignKeyConstraint,
+  CheckConstraint,
+  UniqueConstraint,
   Index,
 } from "../../types/schema";
 import { Logger } from "../../utils/logger";
@@ -20,7 +23,21 @@ export class SchemaParser {
   }
 
   parseSchema(sql: string): Table[] {
-    const { tables } = this.parseWithCST(sql);
+    const { tables, indexes } = this.parseWithCST(sql);
+    
+    // Associate standalone indexes with their tables
+    const tableMap = new Map(tables.map(t => [t.name, t]));
+    
+    for (const index of indexes) {
+      const table = tableMap.get(index.tableName);
+      if (table) {
+        if (!table.indexes) {
+          table.indexes = [];
+        }
+        table.indexes.push(index);
+      }
+    }
+    
     return tables;
   }
 
@@ -81,25 +98,19 @@ export class SchemaParser {
       const tableName = this.extractTableNameFromCST(node);
       if (!tableName) return null;
 
-      // Extract columns and collect column-level primary key info
-      const columnPrimaryKeys: string[] = [];
-      const columns = this.extractColumnsFromCST(node, columnPrimaryKeys);
+      // Extract columns
+      const columns = this.extractColumnsFromCST(node);
 
-      // Extract table-level primary key constraints
-      const tableLevelPrimaryKey =
-        this.extractTableLevelPrimaryKeyFromCST(node);
-
-      // Build unified primary key constraint
-      const primaryKey = this.buildPrimaryKeyConstraint(
-        columnPrimaryKeys,
-        tableLevelPrimaryKey,
-        tableName
-      );
+      // Extract ALL constraints in a unified way
+      const constraints = this.extractAllConstraintsFromCST(node, tableName);
 
       return {
         name: tableName,
         columns,
-        primaryKey,
+        primaryKey: constraints.primaryKey,
+        foreignKeys: constraints.foreignKeys.length > 0 ? constraints.foreignKeys : undefined,
+        checkConstraints: constraints.checkConstraints.length > 0 ? constraints.checkConstraints : undefined,
+        uniqueConstraints: constraints.uniqueConstraints.length > 0 ? constraints.uniqueConstraints : undefined,
       };
     } catch (error) {
       Logger.warning(
@@ -120,10 +131,7 @@ export class SchemaParser {
     }
   }
 
-  private extractColumnsFromCST(
-    node: any,
-    columnPrimaryKeys: string[]
-  ): Column[] {
+  private extractColumnsFromCST(node: any): Column[] {
     const columns: Column[] = [];
 
     try {
@@ -132,7 +140,7 @@ export class SchemaParser {
 
       for (const columnNode of columnItems) {
         if (columnNode.type === "column_definition") {
-          const column = this.parseColumnFromCST(columnNode, columnPrimaryKeys);
+          const column = this.parseColumnFromCST(columnNode);
           if (column) {
             columns.push(column);
           }
@@ -149,10 +157,7 @@ export class SchemaParser {
     return columns;
   }
 
-  private parseColumnFromCST(
-    node: any,
-    columnPrimaryKeys: string[]
-  ): Column | null {
+  private parseColumnFromCST(node: any): Column | null {
     try {
       // Extract column name from the node
       const name = node.name?.text || node.name?.name;
@@ -161,13 +166,8 @@ export class SchemaParser {
       // Extract data type
       const type = this.extractDataTypeFromCST(node);
 
-      // Extract constraints
-      const constraints = this.extractConstraintsFromCST(node);
-
-      // If this column has a primary key constraint, add it to the list
-      if (constraints.primary) {
-        columnPrimaryKeys.push(name);
-      }
+      // Extract basic constraints (just for column properties)
+      const constraints = this.extractBasicConstraintsFromCST(node);
 
       // Extract default value
       const defaultValue = this.extractDefaultValueFromCST(node);
@@ -212,7 +212,7 @@ export class SchemaParser {
     }
   }
 
-  private extractConstraintsFromCST(node: any): {
+  private extractBasicConstraintsFromCST(node: any): {
     notNull: boolean;
     primary: boolean;
   } {
@@ -234,6 +234,452 @@ export class SchemaParser {
     }
 
     return { notNull, primary };
+  }
+
+  // Unified constraint extraction - handles ALL constraint types
+  private extractAllConstraintsFromCST(node: any, tableName: string): {
+    primaryKey?: PrimaryKeyConstraint;
+    foreignKeys: ForeignKeyConstraint[];
+    checkConstraints: CheckConstraint[];
+    uniqueConstraints: UniqueConstraint[];
+  } {
+    const foreignKeys: ForeignKeyConstraint[] = [];
+    const checkConstraints: CheckConstraint[] = [];
+    const uniqueConstraints: UniqueConstraint[] = [];
+    const columnPrimaryKeys: string[] = [];
+    let tableLevelPrimaryKey: PrimaryKeyConstraint | undefined;
+
+    try {
+      const columnItems = node.columns?.expr?.items || [];
+
+      for (const item of columnItems) {
+        if (item.type === "column_definition") {
+          // Extract column-level constraints
+          this.extractColumnConstraints(item, columnPrimaryKeys, checkConstraints, uniqueConstraints);
+        } else if (item.type === "constraint") {
+          // Extract named table-level constraints
+          const pk = this.extractNamedConstraint(item, tableLevelPrimaryKey, foreignKeys, checkConstraints, uniqueConstraints);
+          if (pk) tableLevelPrimaryKey = pk;
+        } else if (item.type === "constraint_primary_key") {
+          // Extract direct table-level primary key
+          tableLevelPrimaryKey = this.parseTableConstraintFromCST(item);
+        } else if (item.type === "constraint_foreign_key") {
+          // Extract direct table-level foreign key
+          const fk = this.parseForeignKeyConstraintFromCST(item);
+          if (fk) foreignKeys.push(fk);
+        } else if (item.type === "constraint_check") {
+          // Extract direct table-level check constraint
+          const check = this.parseCheckConstraintFromCST(item);
+          if (check) checkConstraints.push(check);
+        } else if (item.type === "constraint_unique") {
+          // Extract direct table-level unique constraint
+          const unique = this.parseUniqueConstraintFromCST(item);
+          if (unique) uniqueConstraints.push(unique);
+        }
+      }
+    } catch (error) {
+      Logger.warning(
+        `⚠️ Failed to extract constraints: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+
+    // Build final primary key constraint
+    const primaryKey = this.buildPrimaryKeyConstraint(
+      columnPrimaryKeys,
+      tableLevelPrimaryKey,
+      tableName
+    );
+
+    return {
+      primaryKey,
+      foreignKeys,
+      checkConstraints,
+      uniqueConstraints,
+    };
+  }
+
+  private extractColumnConstraints(
+    columnNode: any,
+    columnPrimaryKeys: string[],
+    checkConstraints: CheckConstraint[],
+    uniqueConstraints: UniqueConstraint[]
+  ): void {
+    const columnName = columnNode.name?.text || columnNode.name?.name;
+    if (!columnName) return;
+
+    try {
+      if (columnNode.constraints && Array.isArray(columnNode.constraints)) {
+        for (const constraint of columnNode.constraints) {
+          if (constraint.type === "constraint_primary_key") {
+            columnPrimaryKeys.push(columnName);
+          } else if (constraint.type === "constraint_check") {
+            const check = this.parseColumnCheckConstraint(constraint, columnName);
+            if (check) checkConstraints.push(check);
+          } else if (constraint.type === "constraint_unique") {
+            const unique = this.parseColumnUniqueConstraint(constraint, columnName);
+            if (unique) uniqueConstraints.push(unique);
+          }
+        }
+      }
+    } catch (error) {
+      Logger.warning(`⚠️ Failed to extract column constraints for ${columnName}`);
+    }
+  }
+
+  private extractNamedConstraint(
+    item: any,
+    tableLevelPrimaryKey: PrimaryKeyConstraint | undefined,
+    foreignKeys: ForeignKeyConstraint[],
+    checkConstraints: CheckConstraint[],
+    uniqueConstraints: UniqueConstraint[]
+  ): PrimaryKeyConstraint | undefined {
+    const constraintName = item.name?.name?.text || item.name?.name?.name;
+    const constraint = item.constraint;
+
+    if (!constraint) return tableLevelPrimaryKey;
+
+    try {
+      if (constraint.type === "constraint_primary_key") {
+        const pk = this.parseTableConstraintFromCST(constraint);
+        if (pk) {
+          pk.name = constraintName;
+          return pk; // Return the primary key to be assigned
+        }
+      } else if (constraint.type === "constraint_foreign_key") {
+        const fk = this.parseForeignKeyConstraintFromCST(constraint);
+        if (fk) {
+          fk.name = constraintName;
+          foreignKeys.push(fk);
+        }
+      } else if (constraint.type === "constraint_check") {
+        const check = this.parseCheckConstraintFromCST(constraint);
+        if (check) {
+          check.name = constraintName;
+          checkConstraints.push(check);
+        }
+      } else if (constraint.type === "constraint_unique") {
+        const unique = this.parseUniqueConstraintFromCST(constraint);
+        if (unique) {
+          unique.name = constraintName;
+          uniqueConstraints.push(unique);
+        }
+      }
+    } catch (error) {
+      Logger.warning(`⚠️ Failed to extract named constraint ${constraintName}`);
+    }
+    
+    return tableLevelPrimaryKey;
+  }
+
+  // Constraint parsing methods
+  private parseCheckConstraintFromCST(node: any): CheckConstraint | null {
+    try {
+      // Extract constraint name if present
+      let constraintName: string | undefined;
+      if (node.name) {
+        constraintName = node.name.text || node.name.name;
+      }
+
+      // Extract the check expression
+      // The expression might be wrapped in parentheses, so handle paren_expr
+      let exprNode = node.expr;
+      if (exprNode?.type === "paren_expr" && exprNode.expr) {
+        exprNode = exprNode.expr;
+      }
+      
+      const expression = this.serializeExpressionFromCST(exprNode);
+      if (!expression || expression === "unknown_expression") {
+        return null;
+      }
+
+      return {
+        name: constraintName,
+        expression,
+      };
+    } catch (error) {
+      Logger.warning(
+        `⚠️ Failed to parse check constraint: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return null;
+    }
+  }
+
+  private parseColumnCheckConstraint(node: any, columnName: string): CheckConstraint | null {
+    try {
+      // Column-level check constraints usually don't have explicit names
+      // We'll generate a name based on the column
+      const constraintName = `${columnName}_check`;
+
+      // Extract the check expression
+      let exprNode = node.expr;
+      if (exprNode?.type === "paren_expr" && exprNode.expr) {
+        exprNode = exprNode.expr;
+      }
+      
+      const expression = this.serializeExpressionFromCST(exprNode);
+      if (!expression || expression === "unknown_expression") {
+        return null;
+      }
+
+      return {
+        name: constraintName,
+        expression,
+      };
+    } catch (error) {
+      Logger.warning(
+        `⚠️ Failed to parse column-level check constraint: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return null;
+    }
+  }
+
+  private parseForeignKeyConstraintFromCST(node: any): ForeignKeyConstraint | null {
+    try {
+      // Extract constraint name if present
+      let constraintName: string | undefined;
+      if (node.name) {
+        constraintName = node.name.text || node.name.name;
+      }
+
+      // Extract column list from the columns property
+      const columns: string[] = [];
+      const columnList = node.columns;
+
+      if (columnList?.expr?.items) {
+        for (const col of columnList.expr.items) {
+          let colName: string | undefined;
+          if (col.type === "index_specification" && col.expr) {
+            colName = col.expr.text || col.expr.name;
+          } else {
+            colName = col.text || col.name?.text || col.name?.name;
+          }
+
+          if (colName) {
+            columns.push(colName);
+          }
+        }
+      }
+
+      // Extract referenced table and columns from references property
+      let referencedTable: string | undefined;
+      const referencedColumns: string[] = [];
+
+      if (node.references) {
+        referencedTable = node.references.table?.text || node.references.table?.name;
+        
+        if (node.references.columns?.expr?.items) {
+          for (const col of node.references.columns.expr.items) {
+            let colName: string | undefined;
+            if (col.type === "index_specification" && col.expr) {
+              colName = col.expr.text || col.expr.name;
+            } else {
+              colName = col.text || col.name?.text || col.name?.name;
+            }
+
+            if (colName) {
+              referencedColumns.push(colName);
+            }
+          }
+        }
+      }
+
+      if (!referencedTable || columns.length === 0 || referencedColumns.length === 0) {
+        return null;
+      }
+
+      // Extract ON DELETE and ON UPDATE actions from references.options
+      const onDelete = this.extractReferentialActionFromReferences(node.references, 'DELETE');
+      const onUpdate = this.extractReferentialActionFromReferences(node.references, 'UPDATE');
+
+      return {
+        name: constraintName,
+        columns,
+        referencedTable,
+        referencedColumns,
+        onDelete,
+        onUpdate,
+      };
+    } catch (error) {
+      Logger.warning(
+        `⚠️ Failed to parse foreign key constraint: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return null;
+    }
+  }
+
+  private extractReferentialActionFromReferences(references: any, actionType: 'DELETE' | 'UPDATE'): 'CASCADE' | 'RESTRICT' | 'SET NULL' | 'SET DEFAULT' | undefined {
+    try {
+      // Look for referential actions in the references.options array
+      if (!references?.options || !Array.isArray(references.options)) {
+        return undefined;
+      }
+
+      for (const option of references.options) {
+        // Check if this option matches the action type we're looking for
+        if (option.type === 'referential_action') {
+          const eventType = option.eventKw?.name || option.eventKw?.text;
+          if (eventType === actionType) {
+            const actionName = option.actionKw?.name || option.actionKw?.text;
+            return this.mapActionName(actionName);
+          }
+        }
+      }
+
+      return undefined;
+    } catch (error) {
+      return undefined;
+    }
+  }
+
+  private mapActionName(actionName: string | undefined): 'CASCADE' | 'RESTRICT' | 'SET NULL' | 'SET DEFAULT' | undefined {
+    if (!actionName) return undefined;
+    
+    switch (actionName.toUpperCase()) {
+      case 'CASCADE':
+        return 'CASCADE';
+      case 'RESTRICT':
+        return 'RESTRICT';
+      case 'SET NULL':
+      case 'SETNULL':
+        return 'SET NULL';
+      case 'SET DEFAULT':
+      case 'SETDEFAULT':
+        return 'SET DEFAULT';
+      default:
+        return undefined;
+    }
+  }
+
+  private parseUniqueConstraintFromCST(node: any): UniqueConstraint | null {
+    try {
+      // Extract constraint name if present
+      let constraintName: string | undefined;
+      if (node.name) {
+        constraintName = node.name.text || node.name.name;
+      }
+
+      // Extract column list from the columns property
+      const columns: string[] = [];
+      const columnList = node.columns;
+
+      if (columnList?.expr?.items) {
+        for (const col of columnList.expr.items) {
+          let colName: string | undefined;
+          if (col.type === "index_specification" && col.expr) {
+            colName = col.expr.text || col.expr.name;
+          } else {
+            colName = col.text || col.name?.text || col.name?.name;
+          }
+
+          if (colName) {
+            columns.push(colName);
+          }
+        }
+      }
+
+      if (columns.length === 0) {
+        return null;
+      }
+
+      // Extract deferrable properties
+      let deferrable: boolean | undefined;
+      let initiallyDeferred: boolean | undefined;
+
+      // Look for DEFERRABLE and INITIALLY DEFERRED keywords
+      if (node.deferrable || node.deferrableKw) {
+        deferrable = true;
+      }
+      
+      if (node.initiallyDeferred || node.initiallyDeferredKw || node.initially) {
+        initiallyDeferred = true;
+      }
+
+      return {
+        name: constraintName,
+        columns,
+        deferrable,
+        initiallyDeferred,
+      };
+    } catch (error) {
+      Logger.warning(
+        `⚠️ Failed to parse unique constraint: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return null;
+    }
+  }
+
+  private parseColumnUniqueConstraint(node: any, columnName: string): UniqueConstraint | null {
+    try {
+      // Column-level unique constraints usually don't have explicit names
+      // We'll generate a name based on the column
+      const constraintName = `${columnName}_unique`;
+
+      return {
+        name: constraintName,
+        columns: [columnName],
+      };
+    } catch (error) {
+      Logger.warning(
+        `⚠️ Failed to parse column-level unique constraint: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return null;
+    }
+  }
+
+  private parseTableConstraintFromCST(node: any): PrimaryKeyConstraint | null {
+    try {
+      // Check if this is a primary key constraint
+      if (node.type === "constraint_primary_key") {
+        // Extract constraint name if present
+        let constraintName: string | undefined;
+        if (node.name) {
+          constraintName = node.name.text || node.name.name;
+        }
+
+        // Extract column list from the columns property
+        const columns: string[] = [];
+        const columnList = node.columns;
+
+        if (columnList?.expr?.items) {
+          for (const col of columnList.expr.items) {
+            // Handle index_specification type which contains the column reference
+            let colName: string | undefined;
+            if (col.type === "index_specification" && col.expr) {
+              colName = col.expr.text || col.expr.name;
+            } else {
+              colName = col.text || col.name?.text || col.name?.name;
+            }
+
+            if (colName) {
+              columns.push(colName);
+            }
+          }
+        }
+
+        if (columns.length > 0) {
+          return {
+            name: constraintName,
+            columns,
+          };
+        }
+      }
+
+      return null;
+    } catch (error) {
+      return null;
+    }
   }
 
   private extractDefaultValueFromCST(node: any): string | undefined {
@@ -259,12 +705,20 @@ export class SchemaParser {
       } else if (expr.type === "string_literal") {
         // The text property already includes quotes
         return expr.text;
+      } else if (expr.type === "boolean_literal") {
+        // Handle boolean literals properly 
+        return String(expr.value || expr.valueKw?.text || expr.text);
       } else if (expr.type === "keyword") {
         return expr.text;
-      } else if (expr.type === "function_call") {
+      } else if (expr.type === "function_call" || expr.type === "func_call") {
         // Handle function calls like NOW(), CURRENT_TIMESTAMP
         const funcName = expr.name?.text || expr.name?.name || expr.name;
         if (funcName) {
+          // Special cases for PostgreSQL keywords that look like functions but aren't
+          const keywordFunctions = ['CURRENT_DATE', 'CURRENT_TIME', 'CURRENT_TIMESTAMP', 'LOCALTIME', 'LOCALTIMESTAMP'];
+          if (keywordFunctions.includes(funcName.toUpperCase()) && !expr.args) {
+            return funcName;
+          }
           return `${funcName}()`;
         }
         // Fallback: try to extract text directly
@@ -285,11 +739,12 @@ export class SchemaParser {
         return expr;
       }
 
-      // Last resort: return a descriptive error instead of [object Object]
-      return "CURRENT_TIMESTAMP"; // Common default for timestamp columns
+      // Last resort: log the issue and return null to indicate we couldn't parse it
+      Logger.warning(`⚠️ Unable to serialize default value: ${JSON.stringify(expr)}`);
+      return "NULL";
     } catch (error) {
-      // Return a safe default instead of [object Object]
-      return "CURRENT_TIMESTAMP";
+      Logger.warning(`⚠️ Error serializing default value: ${error instanceof Error ? error.message : String(error)}`);
+      return "NULL";
     }
   }
 
@@ -807,10 +1262,20 @@ export class SchemaParser {
         return expr.text;
       }
 
-      // Comparison expressions (e.g., "column > value")
+      // Binary expressions (comparison, logical operators, etc.)
       if (expr.type === "binary_expr" || expr.type === "binary_op_expr") {
         const left = this.serializeExpressionFromCST(expr.left);
-        const operator = expr.operator || "=";
+        
+        // Extract operator - it might be a string or an object with text/name
+        let operator = "=";
+        if (typeof expr.operator === "string") {
+          operator = expr.operator;
+        } else if (expr.operator?.text) {
+          operator = expr.operator.text;
+        } else if (expr.operator?.name) {
+          operator = expr.operator.name;
+        }
+        
         const right = this.serializeExpressionFromCST(expr.right);
         return `${left} ${operator} ${right}`;
       }
@@ -842,6 +1307,12 @@ export class SchemaParser {
       if (expr.type === "function_call" || expr.type === "func_call") {
         const funcName = expr.name?.text || expr.name?.name || "unknown_func";
 
+        // Special cases for PostgreSQL keywords that look like functions but aren't
+        const keywordFunctions = ['CURRENT_DATE', 'CURRENT_TIME', 'CURRENT_TIMESTAMP', 'LOCALTIME', 'LOCALTIMESTAMP'];
+        if (keywordFunctions.includes(funcName.toUpperCase()) && !expr.args) {
+          return funcName;
+        }
+
         // Handle function arguments
         let args = "";
 
@@ -870,8 +1341,8 @@ export class SchemaParser {
         return `${funcName}(${args})`;
       }
 
-      // Parenthesized expressions
-      if (expr.type === "parenthesized_expr" && expr.expr) {
+      // Parenthesized expressions (handle both "parenthesized_expr" and "paren_expr")
+      if ((expr.type === "parenthesized_expr" || expr.type === "paren_expr") && expr.expr) {
         return `(${this.serializeExpressionFromCST(expr.expr)})`;
       }
 
@@ -884,10 +1355,87 @@ export class SchemaParser {
         return `${operator} ${operand}`;
       }
 
+      // INTERVAL expressions
+      if (expr.type === "interval_expr" || expr.type === "interval_literal") {
+        if (expr.type === "interval_literal") {
+          // Handle interval_literal structure: INTERVAL 'value'
+          const value = expr.string?.text || expr.string?.value || "'1 day'";
+          return `INTERVAL ${value}`;
+        } else {
+          // Handle interval_expr structure: INTERVAL value unit
+          const value = this.serializeExpressionFromCST(expr.value || expr.expr);
+          const unit = expr.unit?.text || expr.unit?.name || "DAY";
+          return `INTERVAL ${value} ${unit}`;
+        }
+      }
+
+      // Keywords (CURRENT_DATE, CURRENT_TIMESTAMP, etc.)
+      if (expr.type === "keyword") {
+        return expr.text || expr.name || String(expr.value);
+      }
+
+      // BETWEEN expressions
+      if (expr.type === "between_expr") {
+        const value = this.serializeExpressionFromCST(expr.left || expr.expr);
+        const low = this.serializeExpressionFromCST(expr.begin || expr.low);
+        const high = this.serializeExpressionFromCST(expr.end || expr.high);
+        return `${value} BETWEEN ${low} AND ${high}`;
+      }
+
+      // IN expressions  
+      if (expr.type === "in_expr") {
+        const value = this.serializeExpressionFromCST(expr.expr);
+        const list = expr.list?.expr?.items || [];
+        const items = list.map((item: any) => this.serializeExpressionFromCST(item)).join(", ");
+        return `${value} IN (${items})`;
+      }
+
+      // IS NULL / IS NOT NULL expressions
+      if (expr.type === "is_expr") {
+        const value = this.serializeExpressionFromCST(expr.expr);
+        const operator = expr.not ? "IS NOT" : "IS";
+        const test = expr.test?.text || "NULL";
+        return `${value} ${operator} ${test}`;
+      }
+
+      // Regular expressions (~, ~*, !~, !~*)
+      if (expr.type === "match_expr") {
+        const left = this.serializeExpressionFromCST(expr.left);
+        const operator = expr.operator?.text || "~";
+        const right = this.serializeExpressionFromCST(expr.right);
+        return `${left} ${operator} ${right}`;
+      }
+
+      // CASE expressions
+      if (expr.type === "case_expr") {
+        let result = "CASE";
+        if (expr.expr) {
+          result += ` ${this.serializeExpressionFromCST(expr.expr)}`;
+        }
+        
+        if (expr.whenList && Array.isArray(expr.whenList)) {
+          for (const whenClause of expr.whenList) {
+            const when = this.serializeExpressionFromCST(whenClause.when);
+            const then = this.serializeExpressionFromCST(whenClause.then);
+            result += ` WHEN ${when} THEN ${then}`;
+          }
+        }
+        
+        if (expr.else) {
+          result += ` ELSE ${this.serializeExpressionFromCST(expr.else)}`;
+        }
+        
+        result += " END";
+        return result;
+      }
+
       // Fallback: try to extract any available text
       if (expr.value !== undefined) {
         return String(expr.value);
       }
+
+      // Log what we're missing for debugging
+      Logger.warning(`⚠️ Unhandled expression type: ${expr.type}, structure: ${JSON.stringify(expr)}`);
 
       // Final fallback
       return "unknown_expression";

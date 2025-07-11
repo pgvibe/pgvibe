@@ -1,4 +1,4 @@
-import type { Table, Column, PrimaryKeyConstraint } from "../types/schema";
+import type { Table, Column, PrimaryKeyConstraint, ForeignKeyConstraint, CheckConstraint, UniqueConstraint } from "../types/schema";
 
 export function normalizeType(type: string): string {
   // Normalize PostgreSQL types to match our parsed types
@@ -83,6 +83,22 @@ export function generateCreateTableStatement(table: Table): string {
     columnDefs.push(primaryKeyClause);
   }
 
+  // Add check constraints if they exist
+  if (table.checkConstraints) {
+    for (const checkConstraint of table.checkConstraints) {
+      const checkClause = generateCheckConstraintClause(checkConstraint);
+      columnDefs.push(checkClause);
+    }
+  }
+
+  // Add unique constraints if they exist
+  if (table.uniqueConstraints) {
+    for (const uniqueConstraint of table.uniqueConstraints) {
+      const uniqueClause = generateUniqueConstraintClause(uniqueConstraint);
+      columnDefs.push(uniqueClause);
+    }
+  }
+
   return `CREATE TABLE ${table.name} (\n  ${columnDefs.join(",\n  ")}\n);`;
 }
 
@@ -112,4 +128,112 @@ export function generateDropPrimaryKeySQL(
   constraintName: string
 ): string {
   return `ALTER TABLE ${tableName} DROP CONSTRAINT ${constraintName};`;
+}
+
+// Foreign Key SQL generation
+export function generateAddForeignKeySQL(
+  tableName: string,
+  foreignKey: ForeignKeyConstraint
+): string {
+  const constraintName = foreignKey.name || `fk_${tableName}_${foreignKey.referencedTable}`;
+  const columns = foreignKey.columns.join(", ");
+  const referencedColumns = foreignKey.referencedColumns.join(", ");
+  
+  let sql = `ALTER TABLE ${tableName} ADD CONSTRAINT ${constraintName} FOREIGN KEY (${columns}) REFERENCES ${foreignKey.referencedTable}(${referencedColumns})`;
+  
+  if (foreignKey.onDelete) {
+    sql += ` ON DELETE ${foreignKey.onDelete}`;
+  }
+  
+  if (foreignKey.onUpdate) {
+    sql += ` ON UPDATE ${foreignKey.onUpdate}`;
+  }
+  
+  return sql + ";";
+}
+
+export function generateDropForeignKeySQL(
+  tableName: string,
+  constraintName: string
+): string {
+  return `ALTER TABLE ${tableName} DROP CONSTRAINT ${constraintName};`;
+}
+
+export function generateForeignKeyClause(foreignKey: ForeignKeyConstraint): string {
+  const columns = foreignKey.columns.join(", ");
+  const referencedColumns = foreignKey.referencedColumns.join(", ");
+  
+  let clause = "";
+  if (foreignKey.name) {
+    clause += `CONSTRAINT ${foreignKey.name} `;
+  }
+  
+  clause += `FOREIGN KEY (${columns}) REFERENCES ${foreignKey.referencedTable}(${referencedColumns})`;
+  
+  if (foreignKey.onDelete) {
+    clause += ` ON DELETE ${foreignKey.onDelete}`;
+  }
+  
+  if (foreignKey.onUpdate) {
+    clause += ` ON UPDATE ${foreignKey.onUpdate}`;
+  }
+  
+  return clause;
+}
+
+// Check Constraint SQL generation
+export function generateAddCheckConstraintSQL(
+  tableName: string,
+  checkConstraint: CheckConstraint
+): string {
+  const constraintName = checkConstraint.name || `check_${tableName}_${Date.now()}`;
+  return `ALTER TABLE ${tableName} ADD CONSTRAINT ${constraintName} CHECK (${checkConstraint.expression});`;
+}
+
+export function generateDropCheckConstraintSQL(
+  tableName: string,
+  constraintName: string
+): string {
+  return `ALTER TABLE ${tableName} DROP CONSTRAINT ${constraintName};`;
+}
+
+export function generateCheckConstraintClause(checkConstraint: CheckConstraint): string {
+  let clause = "";
+  if (checkConstraint.name) {
+    clause += `CONSTRAINT ${checkConstraint.name} `;
+  }
+  
+  clause += `CHECK (${checkConstraint.expression})`;
+  
+  return clause;
+}
+
+// Unique Constraint SQL generation
+export function generateAddUniqueConstraintSQL(
+  tableName: string,
+  uniqueConstraint: UniqueConstraint
+): string {
+  const constraintName = uniqueConstraint.name || `unique_${tableName}_${uniqueConstraint.columns.join('_')}`;
+  const columns = uniqueConstraint.columns.join(", ");
+  return `ALTER TABLE ${tableName} ADD CONSTRAINT ${constraintName} UNIQUE (${columns});`;
+}
+
+export function generateDropUniqueConstraintSQL(
+  tableName: string,
+  constraintName: string
+): string {
+  return `ALTER TABLE ${tableName} DROP CONSTRAINT ${constraintName};`;
+}
+
+export function generateUniqueConstraintClause(uniqueConstraint: UniqueConstraint): string {
+  const columns = uniqueConstraint.columns.join(", ");
+  
+  let clause = "";
+  if (uniqueConstraint.name) {
+    clause += `CONSTRAINT ${uniqueConstraint.name} `;
+  }
+  
+  clause += `UNIQUE (${columns})`;
+  
+  return clause;
 }
