@@ -1,25 +1,21 @@
-// Invalid table selection syntax - should fail compilation
+// Invalid basic .selectFrom() tests - these should cause compilation errors
 
-import { QueryBuilder } from "../../../src/query-builder";
-import { TestDB } from "../../../__shared__/fixtures/test-schema";
+import {expectError} from 'tsd';
+import {QueryBuilder} from '../../../src/query-builder';
+import type {TestDB} from '../../__shared__/fixtures/test-schema';
 
 const qb = new QueryBuilder<TestDB>();
 
-// ❌ Non-existent table names
-// @ts-expect-error - table doesn't exist
-qb.selectFrom("invalid_table");
+// ❌ Invalid table names should cause errors
+expectError(qb.selectFrom('invalid_table'));
+expectError(qb.selectFrom('user')); // typo
+expectError(qb.selectFrom('post')); // typo
+expectError(qb.selectFrom('comment')); // typo
+expectError(qb.selectFrom('')); // empty string
 
-// @ts-expect-error - typo in table name
-qb.selectFrom("user");
-
-// @ts-expect-error - wrong table name
-qb.selectFrom("post");
-
-// @ts-expect-error - empty string
-qb.selectFrom("");
-
-// @ts-expect-error - undefined
-qb.selectFrom(undefined);
-
-// @ts-expect-error - null
-qb.selectFrom(null);
+// ❌ Invalid argument types should cause errors
+expectError(qb.selectFrom(null));
+expectError(qb.selectFrom(undefined));
+expectError(qb.selectFrom(123));
+expectError(qb.selectFrom({}));
+expectError(qb.selectFrom([]));

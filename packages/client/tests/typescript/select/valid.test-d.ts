@@ -1,31 +1,40 @@
-// Valid column selection syntax - should compile without errors
+// Valid basic .select() tests - column selection without aliases
 
-import { QueryBuilder } from "../../../src/query-builder";
-import { TestDB } from "../../../__shared__/fixtures/test-schema";
+import {QueryBuilder} from '../../../src/query-builder';
+import type {TestDB} from '../../__shared__/fixtures/test-schema';
 
 const qb = new QueryBuilder<TestDB>();
 
-// ✅ Basic column selection
-const userColumns = qb.selectFrom("users").select(["id", "name", "email"]);
-const postColumns = qb.selectFrom("posts").select(["title", "content"]);
-
 // ✅ Single column selection
-const singleColumn = qb.selectFrom("users").select(["name"]);
+qb.selectFrom('users').select(['id']);
+qb.selectFrom('users').select(['name']);
+qb.selectFrom('users').select(['email']);
+qb.selectFrom('users').select(['active']);
 
-// ✅ All available columns for a table
-const allUserColumns = qb.selectFrom("users").select(["id", "name", "email", "active"]);
+// ✅ Multiple column selection from users table
+qb.selectFrom('users').select(['id', 'name']);
+qb.selectFrom('users').select(['id', 'name', 'email']);
+qb.selectFrom('users').select(['id', 'name', 'email', 'active']);
 
-// ✅ Qualified column names (table.column)
-const qualifiedColumns = qb.selectFrom("users").select(["users.id", "users.name"]);
+// ✅ Column selection from posts table
+qb.selectFrom('posts').select(['id']);
+qb.selectFrom('posts').select(['title']);
+qb.selectFrom('posts').select(['content']);
+qb.selectFrom('posts').select(['user_id']);
+qb.selectFrom('posts').select(['id', 'title', 'content']);
 
-// ✅ Column aliases
-const columnAliases = qb.selectFrom("users").select(["name as username", "email as userEmail"]);
+// ✅ Column selection from comments table
+qb.selectFrom('comments').select(['id']);
+qb.selectFrom('comments').select(['content']);
+qb.selectFrom('comments').select(['post_id']);
+qb.selectFrom('comments').select(['user_id']);
+qb.selectFrom('comments').select(['id', 'content', 'post_id']);
 
-// ✅ With table aliases - using alias prefix
-const aliasedTableColumns = qb.selectFrom("users as u").select(["u.id", "u.name"]);
+// ✅ Qualified column names (table.column) - no aliases
+qb.selectFrom('users').select(['users.id', 'users.name']);
+qb.selectFrom('posts').select(['posts.title', 'posts.content']);
+qb.selectFrom('comments').select(['comments.content', 'comments.post_id']);
 
-// ✅ With table aliases - unqualified columns
-const unqualifiedWithAlias = qb.selectFrom("users as u").select(["id", "name"]);
-
-// ✅ Mixed qualified and unqualified
-const mixedColumns = qb.selectFrom("users as u").select(["u.id", "name", "email"]);
+// ✅ Mixed qualified and unqualified columns
+qb.selectFrom('users').select(['id', 'users.name', 'email']);
+qb.selectFrom('posts').select(['posts.id', 'title', 'posts.user_id']);

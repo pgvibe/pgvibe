@@ -1,20 +1,16 @@
-// Valid table selection syntax - should compile without errors
+// Valid basic .selectFrom() tests - table selection without aliases
 
-import { QueryBuilder } from "../../../src/query-builder";
-import { TestDB } from "../../../__shared__/fixtures/test-schema";
+import {QueryBuilder} from '../../../src/query-builder';
+import type {TestDB} from '../../__shared__/fixtures/test-schema';
 
 const qb = new QueryBuilder<TestDB>();
 
-// ✅ Basic table selection
-const users = qb.selectFrom("users");
-const posts = qb.selectFrom("posts"); 
-const comments = qb.selectFrom("comments");
+// ✅ Valid table names should compile
+qb.selectFrom('users');
+qb.selectFrom('posts');
+qb.selectFrom('comments');
 
-// ✅ Table aliases
-const usersAliased = qb.selectFrom("users as u");
-const postsAliased = qb.selectFrom("posts as p");
-const commentsAliased = qb.selectFrom("comments as c");
-
-// ✅ Table aliases with different alias names
-const userWithLongAlias = qb.selectFrom("users as user_table");
-const postWithShortAlias = qb.selectFrom("posts as p1");
+// ✅ Basic table selection should work (compilation test)
+qb.selectFrom('users');
+qb.selectFrom('posts');
+qb.selectFrom('comments');

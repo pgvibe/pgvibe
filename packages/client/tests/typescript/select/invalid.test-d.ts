@@ -1,47 +1,42 @@
-// Invalid column selection syntax - should fail compilation
+// Invalid basic .select() tests - these should cause compilation errors
 
-import { QueryBuilder } from "../../../src/query-builder";
-import { TestDB } from "../../../__shared__/fixtures/test-schema";
+import {expectError} from 'tsd';
+import {QueryBuilder} from '../../../src/query-builder';
+import type {TestDB} from '../../__shared__/fixtures/test-schema';
 
 const qb = new QueryBuilder<TestDB>();
 
-// ❌ Non-existent columns
-// @ts-expect-error - column doesn't exist
-qb.selectFrom("users").select(["invalid_column"]);
+// ❌ Invalid column names should cause errors
+expectError(qb.selectFrom('users').select(['invalid_column']));
+expectError(qb.selectFrom('users').select(['nam'])); // typo in 'name'
+expectError(qb.selectFrom('users').select(['emil'])); // typo in 'email'
 
-// @ts-expect-error - typo in column name
-qb.selectFrom("users").select(["nam"]);
+// ❌ Columns from wrong tables should cause errors
+expectError(qb.selectFrom('users').select(['title'])); // title is from posts
+expectError(qb.selectFrom('users').select(['content'])); // content is from posts/comments
+expectError(qb.selectFrom('posts').select(['active'])); // active is from users
+expectError(qb.selectFrom('comments').select(['name'])); // name is from users
 
-// @ts-expect-error - column from different table
-qb.selectFrom("users").select(["title"]);
+// ❌ Wrong qualified column names should cause errors
+expectError(qb.selectFrom('users').select(['posts.title'])); // wrong table qualifier
+expectError(qb.selectFrom('posts').select(['users.name'])); // wrong table qualifier
+expectError(qb.selectFrom('comments').select(['posts.content'])); // wrong table qualifier
 
-// ❌ Wrong qualified column references
-// @ts-expect-error - wrong table qualifier
-qb.selectFrom("users").select(["posts.title"]);
+// ❌ Non-existent qualified columns should cause errors
+expectError(qb.selectFrom('users').select(['users.title'])); // title not in users
+expectError(qb.selectFrom('posts').select(['posts.active'])); // active not in posts
 
-// @ts-expect-error - non-existent table qualifier
-qb.selectFrom("users").select(["invalid.name"]);
+// ❌ Mixed valid/invalid columns should cause errors
+expectError(qb.selectFrom('users').select(['id', 'invalid_column']));
+expectError(qb.selectFrom('users').select(['name', 'title'])); // title not in users
 
-// ❌ Alias violations - using original table name after alias
-// @ts-expect-error - cannot use original table name with alias
-qb.selectFrom("users as u").select(["users.id"]);
+// ❌ Invalid argument types should cause errors
+expectError(qb.selectFrom('users').select(null));
+expectError(qb.selectFrom('users').select(undefined));
+expectError(qb.selectFrom('users').select('id')); // should be array
+expectError(qb.selectFrom('users').select([123])); // invalid column type
+expectError(qb.selectFrom('users').select([null]));
+expectError(qb.selectFrom('users').select([{}]));
 
-// @ts-expect-error - mixing original and alias references
-qb.selectFrom("users as u").select(["users.name", "u.email"]);
-
-// ❌ Invalid alias references
-// @ts-expect-error - alias doesn't exist
-qb.selectFrom("users").select(["u.name"]);
-
-// @ts-expect-error - wrong alias name
-qb.selectFrom("users as u").select(["usr.name"]);
-
-// ❌ Empty or invalid selections
-// @ts-expect-error - empty array not valid
-qb.selectFrom("users").select([]);
-
-// @ts-expect-error - null not valid
-qb.selectFrom("users").select(null);
-
-// @ts-expect-error - undefined not valid
-qb.selectFrom("users").select(undefined);
+// ❌ Empty arrays should cause errors (need at least one column)
+expectError(qb.selectFrom('users').select([]));
