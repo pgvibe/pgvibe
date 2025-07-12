@@ -6,14 +6,14 @@ export type {
   TableName,
   AliasedTable,
   TableExpression
-} from "./database.js";
+} from "./database";
 
 // Column types  
 export type {
   ColumnName,
   QualifiedColumnName,
   ExtractTableAlias
-} from "./columns.js";
+} from "./columns";
 
 // Query context types
 export type {
@@ -22,10 +22,10 @@ export type {
   QueryContext,
   AvailableTables,
   JoinColumnReference
-} from "./query.js";
+} from "./query";
 
 // Result types
 export type {
   SelectionResult,
   Prettify
-} from "./result.js";
+} from "./result";

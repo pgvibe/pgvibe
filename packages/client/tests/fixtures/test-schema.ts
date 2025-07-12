@@ -12,6 +12,7 @@ export interface TestDB {
     id: number;
     user_id: number;
     title: string;
+    content: string;
     published: boolean;
   };
   comments: {

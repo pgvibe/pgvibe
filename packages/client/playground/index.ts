@@ -1,6 +1,10 @@
-import { qb } from "../src/index.js";
+import { pgvibe } from "../src/index";
+import type { TestDB } from "../tests/fixtures/test-schema";
 
-const demo5 = await qb
+// Use properly typed query builder instead of the any-typed qb
+const db = pgvibe<TestDB>();
+
+const demo5 = await db
   .selectFrom("users as u")
   .innerJoin("posts as pasta", "u.id", "pasta.user_id")
   .leftJoin("comments as c", "pasta.id", "c.post_id")

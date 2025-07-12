@@ -1,6 +1,6 @@
 // Result type definitions for query execution
 
-import type { ColumnName } from "./columns.js";
+import type { ColumnName } from "./columns";
 
 /**
  * Maps selected columns to their result object type

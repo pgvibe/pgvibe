@@ -1,6 +1,6 @@
 // Query context and result types
 
-import type { ExtractTableAlias } from "./columns.js";
+import type { ExtractTableAlias } from "./columns";
 
 // === UTILITY TYPES ===
 
@@ -60,7 +60,7 @@ export type AvailableTables<DB, TB extends keyof DB, TE> = NormalizeUnion<
 
 // === JOIN TYPES ===
 
-import type { ColumnName, QualifiedColumnName } from "./columns.js";
+import type { ColumnName, QualifiedColumnName } from "./columns";
 
 /**
  * Valid column references for JOIN conditions
