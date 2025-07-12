@@ -15,6 +15,10 @@ export {
   type ExtractTableAlias,
 } from "./query-builder.js";
 
-// For convenience, also export a pre-configured instance
-// Users can either import { qb } or create their own QueryBuilder<MyDB>
+// Main pgvibe function - the primary API
+export function pgvibe<DB>(): QueryBuilder<DB> {
+  return new QueryBuilder<DB>();
+}
+
+// Legacy export for backwards compatibility
 export { qb } from "./query-builder.js";

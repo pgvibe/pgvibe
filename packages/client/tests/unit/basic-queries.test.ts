@@ -2,8 +2,8 @@
 // Goal: Get basic db.selectFrom("users").select(["id", "name"]) working
 
 import { test, expect } from "bun:test";
-import { QueryBuilder } from "../src/query-builder";
-import type { TestDB } from "./test-schema";
+import { QueryBuilder } from "../../src/query-builder.js";
+import type { TestDB } from "../fixtures/test-schema.js";
 
 test("should create query builder from table name", () => {
   const qb = new QueryBuilder<TestDB>();

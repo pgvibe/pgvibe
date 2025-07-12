@@ -27,7 +27,7 @@
         "typescript": "^5.8.3",
       },
       "peerDependencies": {
-        "typescript": "^5.8.3",
+        "typescript": ">=5.0.0",
       },
     },
     "packages/codegen": {

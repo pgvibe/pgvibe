@@ -2,8 +2,8 @@
 // Goal: Make db.selectFrom("users as u") work perfectly with alias exclusivity
 
 import { test, expect } from "bun:test";
-import { QueryBuilder } from "../src/query-builder";
-import type { TestDB } from "./test-schema";
+import { QueryBuilder } from "../../src/query-builder";
+import type { TestDB } from "../fixtures/test-schema";
 
 test("should create query builder from aliased table", () => {
   const qb = new QueryBuilder<TestDB>();

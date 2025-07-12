@@ -15,7 +15,7 @@
   "scripts": {
     "build": "bun run build:js && bun run build:types",
     "build:js": "bun build src/index.ts --outdir dist --target node --minify",
-    "build:types": "bunx tsc src/index.ts --declaration --emitDeclarationOnly --outDir dist",
+    "build:types": "bunx tsc --project tsconfig.build.json",
     "clean": "rm -rf dist",
     "prepublishOnly": "bun run clean && bun run build",
     "test": "bun test tests/ && bun run test:types",

@@ -1,225 +1,155 @@
-# pgvibe/client
+# PGVibe Query Builder
 
-A PostgreSQL-native TypeScript query builder with advanced type safety and comprehensive PostgreSQL feature support.
+A PostgreSQL-native TypeScript query builder with perfect autocomplete and type safety.
 
-## Features
+## ✨ Features
 
-🚀 **PostgreSQL-Native Architecture**
+- **Perfect TypeScript Integration** - Excellent autocomplete and compile-time error detection
+- **PostgreSQL-Native** - Designed specifically for PostgreSQL, no multi-database compromises  
+- **Table Alias System** - Advanced alias support with proper type safety
+- **Immutable Builder Pattern** - Chainable, predictable query building
+- **Zero Runtime Dependencies** - Lightweight and fast
 
-- Direct PostgreSQL integration with no dialect abstraction
-- Full PostgreSQL feature set support (JSONB, arrays, CTEs, window functions)
-- Optimized for PostgreSQL-specific performance patterns
-
-🔒 **Advanced Type Safety**
-
-- Compile-time query validation with TypeScript
-- Proper type inference for SELECT operations
-- Ambiguous column detection and prevention
-- PostgreSQL-aware type system with `<DB, TB, O>` pattern
-
-🏗️ **Immutable Builder Pattern**
-
-- Type-safe query building with method chaining
-- Immutable AST representation for query operations
-- Extensible plugin system architecture
-
-🧪 **Comprehensive Testing**
-
-- 197+ passing tests covering all PostgreSQL features
-- Integration tests with real PostgreSQL instances
-- Type-level testing with `tsd` for compile-time validation
-- Performance benchmarks and optimization testing
-
-## Installation
-
-```bash
-npm install @pgvibe/client
-# or
-bun install @pgvibe/client
-# or
-yarn add @pgvibe/client
-```
-
-## Quick Start
+## 🚀 Quick Start
 
 ```typescript
 import { pgvibe } from "@pgvibe/client";
 
-// Define your database schema
-interface Database {
-  users: {
-    id: number;
-    name: string;
-    email: string | null;
-    active: boolean;
-    metadata: Record<string, any>; // JSONB
-    tags: string[]; // PostgreSQL arrays
-    created_at: Date;
-  };
-  posts: {
-    id: number;
-    user_id: number;
-    title: string;
-    content: string | null;
-    published: boolean;
-    tags: string[];
-    metadata: Record<string, any>;
-    created_at: Date;
-  };
-  comments: {
-    id: number;
-    post_id: number;
-    user_id: number;
-    content: string;
-    author_name: string;
-    reactions: Record<string, any>;
-    created_at: Date;
-  };
+// Define individual table schemas for reusability
+export interface Users {
+  id: number;
+  name: string;
+  email: string;
+  active: boolean;
 }
 
-// Create database connection
-const db = new pgvibe<Database>({
-  connectionString: "postgresql://user:password@localhost:5432/mydb",
-});
-```
+export interface Posts {
+  id: number;
+  user_id: number;
+  title: string;
+  content: string;
+  published: boolean;
+}
 
-## Usage Examples
+// Compose them into your database schema
+interface MyDatabase {
+  users: Users;
+  posts: Posts;
+}
 
-### Basic Queries
+// Create a query builder with your schema
+const db = pgvibe<MyDatabase>();
 
-```typescript
-// Simple SELECT with type inference
-const activeUsers = await db
+// Basic query
+const users = await db
   .selectFrom("users")
   .select(["id", "name", "email"])
-  .where("active", "=", true)
   .execute();
-// Type: { id: number; name: string; email: string | null }[]
 
-// PostgreSQL JSONB operations
-const usersWithPreferences = await db
-  .selectFrom("users")
-  .select(["name", "metadata"])
-  .where("metadata", "->", "preferences")
-  .execute();
-```
-
-### Joins with Type Safety
-
-```typescript
-// JOIN queries with proper type inference
+// With table aliases and JOINs
 const userPosts = await db
-  .selectFrom("users")
-  .innerJoin("posts", "users.id", "posts.user_id")
-  .select(["users.name", "posts.title", "posts.published"])
-  .where("users.active", "=", true)
-  .orderBy("posts.created_at", "DESC")
-  .execute();
-// Type: { name: string; title: string; published: boolean }[]
-
-// Three-way joins
-const fullData = await db
-  .selectFrom("users")
-  .innerJoin("posts", "users.id", "posts.user_id")
-  .leftJoin("comments", "posts.id", "comments.post_id")
-  .select(["users.name", "posts.title", "comments.content"])
-  .execute();
-// Type: { name: string; title: string; content: string | null }[]
-```
-
-### Raw SQL for Advanced PostgreSQL Features
-
-```typescript
-import { sql } from "@pgvibe/client";
-
-// JSONB operations using raw SQL
-const usersWithDarkTheme = await db
-  .selectFrom("users")
-  .select(["name", "metadata"])
-  .where(sql`metadata->>'preferences'->>'theme' = ${"dark"}`)
-  .execute();
-
-// Array operations using raw SQL
-const taggedPosts = await db
-  .selectFrom("posts")
-  .select(["title", "tags"])
-  .where(sql`tags @> ${["typescript", "database"]}`)
-  .execute();
-
-// Full-text search using raw SQL
-const searchPosts = await db
-  .selectFrom("posts")
-  .select(["title", "content"])
-  .where(sql`search_vector @@ plainto_tsquery(${"typescript"})`)
-  .execute();
-```
-
-### Advanced Query Building
-
-```typescript
-// Complex WHERE conditions
-const complexQuery = await db
-  .selectFrom("users")
-  .innerJoin("posts", "users.id", "posts.user_id")
-  .select(["users.name", "posts.title"])
-  .where("users.active", "=", true)
-  .where("posts.published", "=", true)
-  .where("posts.tags", "&&", ["featured"])
-  .orderBy("posts.created_at", "desc")
-  .limit(10)
-  .execute();
-
-// Qualified column selection (removes table prefixes from result)
-const qualifiedSelection = await db
-  .selectFrom("users")
-  .innerJoin("posts", "users.id", "posts.user_id")
+  .selectFrom("users as u")
+  .innerJoin("posts as p", "u.id", "p.user_id")
   .select([
-    "name", // Unambiguous - from users table
-    "posts.title", // Qualified - becomes "title" in result
-    "users.email", // Qualified - becomes "email" in result
+    "u.name as author",
+    "p.title as postTitle", 
+    "p.published"
   ])
   .execute();
-// Type: { name: string; title: string; email: string | null }[]
 ```
 
-## Architecture
+## 🎯 Type Safety
 
-### PostgreSQL-Native Design
-
-pgvibe is built specifically for PostgreSQL, allowing us to:
-
-- **Leverage Full PostgreSQL Power**: Direct access to JSONB, arrays, CTEs, window functions, and more
-- **Optimize for PostgreSQL**: No generic SQL abstraction overhead
-- **Better Developer Experience**: PostgreSQL-specific type safety and IntelliSense
-- **Simplified Codebase**: No complex dialect abstraction layers
-
-### Type System
-
-The type system uses a three-parameter approach:
-
-- `DB`: Database schema interface
-- `TB`: Table(s) being queried (union type for joins)
-- `O`: Output/result type with proper column selection
+The query builder provides excellent TypeScript experience:
 
 ```typescript
-interface SelectQueryBuilder<DB, TB extends keyof DB, O> {
-  select<K extends ColumnReference<DB, TB>>(
-    columns: K[]
-  ): SelectQueryBuilder<DB, TB, SelectResult<DB, TB, K>>;
+// ✅ Perfect autocomplete
+db.selectFrom("users")  // Shows: "users", "posts"
+  .select(["id", "name"]) // Shows only valid columns
 
-  where<C extends ColumnReference<DB, TB>>(
-    column: C,
-    operator: ComparisonOperator,
-    value: ColumnType<DB, TB, C>
-  ): SelectQueryBuilder<DB, TB, O>;
+// ✅ Compile-time validation
+db.selectFrom("users as u")
+  .select(["u.name"])     // ✅ Valid
+  .select(["users.name"]) // ❌ TypeScript error - alias exclusivity
 
-  // ... more methods
-}
+// ✅ Result type inference
+const result = await db.selectFrom("users").select(["id", "name"]).execute();
+// result: { id: number, name: string }[]
 ```
 
-## Development
+## 🎪 Core Concepts
 
-Built with [Bun](https://bun.sh) and PostgreSQL.
+### Table Aliases
+
+When you use a table alias, the original table name becomes unavailable:
+
+```typescript
+// After aliasing "users as u", only "u.*" and unqualified columns work
+db.selectFrom("users as u")
+  .select(["u.id", "u.name", "email"]) // ✅ Valid
+  .select(["users.id"])                // ❌ TypeScript error
+```
+
+### JOIN Operations
+
+```typescript
+const query = qb
+  .selectFrom("users as u")
+  .innerJoin("posts as p", "u.id", "p.user_id")
+  .leftJoin("comments as c", "p.id", "c.post_id")
+  .select([
+    "u.name",           // string
+    "p.title",          // string  
+    "c.content"         // string | null (from LEFT JOIN)
+  ]);
+```
+
+### Column Aliases
+
+```typescript
+const result = await qb
+  .selectFrom("users")
+  .select([
+    "id as userId",
+    "name as userName",
+    "email"
+  ])
+  .execute();
+
+// result: { userId: number, userName: string, email: string }[]
+```
+
+## 🧪 Testing
+
+The package includes comprehensive tests ensuring reliability:
+
+- **40 tests** across unit, integration, and TypeScript validation
+- **Organized test structure**: `tests/unit/`, `tests/typescript/`, `tests/integration/`
+- **Regression prevention**: Complete validation suites to prevent breaking changes
+
+```bash
+# Run all tests
+bun test
+
+# Run specific test category  
+bun test tests/unit/
+bun test tests/typescript/
+
+# Type checking
+bun run typecheck
+```
+
+## 📁 Examples
+
+Check the `examples/` directory for comprehensive usage examples:
+
+- **`basic-usage.ts`** - Simple queries and basic concepts
+- **`advanced-queries.ts`** - Complex JOINs and real-world patterns
+- **`type-safety.ts`** - TypeScript autocomplete and validation showcase
+
+## 🔧 Development
+
+Built with [Bun](https://bun.sh) for fast development.
 
 ### Setup
 
@@ -227,10 +157,7 @@ Built with [Bun](https://bun.sh) and PostgreSQL.
 # Install dependencies
 bun install
 
-# Start PostgreSQL database
-bun run db:up
-
-# Run tests (includes type testing)
+# Run tests
 bun test
 
 # Build the package
@@ -240,202 +167,85 @@ bun run build
 bun run dev
 ```
 
-### Testing
+### Project Structure
 
-pgvibe includes comprehensive testing across runtime behavior and compile-time type safety:
+```
+src/                  # Source code
+├── types/           # Modular type definitions
+├── query-builder.ts # Core implementation
+└── index.ts         # Public API
 
-```bash
-# All tests (runtime + type tests)
-bun test
+tests/               # Comprehensive test suite
+├── unit/           # Unit tests
+├── typescript/     # TypeScript validation  
+├── integration/    # End-to-end tests
+└── fixtures/       # Test schema
 
-# Runtime tests only (196 tests)
-bun run test:runtime
-
-# Type tests only (TypeScript Declaration Testing)
-bun run test:types
-
-# Integration tests with PostgreSQL
-bun run test:integration
-
-# Performance benchmarks
-bun run test:performance
-
-# Watch mode for development
-bun run test:watch
+examples/           # Usage examples
 ```
 
-#### Type Testing with TSD
+## 📖 API Reference
 
-pgvibe uses [TSD (TypeScript Definition Testing)](https://github.com/SamVerschueren/tsd) to validate compile-time type safety. This ensures that:
-
-- **Type constraints are enforced**: Invalid type combinations are caught at compile time
-- **IntelliSense works correctly**: Proper autocomplete and type hints
-- **Error messages are helpful**: Clear feedback when types don't match
-
-**Type Test Examples:**
+### QueryBuilder
 
 ```typescript
-import { expectType, expectError } from "tsd";
-import { pgvibe } from "@pgvibe/client";
-
-const db = new pgvibe<Database>({
-  connectionString: "postgresql://localhost:5432/test",
-});
-
-// ✅ Valid type combinations should work
-expectType<{ id: number; name: string }[]>(
-  await db.selectFrom("users").select(["id", "name"]).execute()
-);
-
-// ❌ Invalid type combinations should be caught
-expectError(
-  db.selectFrom("users").select(["id"]).where("id", "=", "not_a_number")
-);
-
-// ❌ Wrong operators for null should be caught
-expectError(
-  db.selectFrom("users").select(["name"]).where("email", "=", null) // Should use "is"
-);
-
-// ❌ Type mismatches in arrays should be caught
-expectError(
-  db.selectFrom("users").select(["id"]).where("id", "in", [1, "2", 3]) // Mixed types
-);
+new QueryBuilder<DB>()
 ```
 
-**Running Type Tests:**
+Create a new query builder instance for your database schema.
 
-```bash
-# Run all type tests
-bun run test:types
-
-# Watch mode for type test development
-bun run test:types:watch
-
-# Build types to catch compilation errors
-bun run build:types
-```
-
-**Type Test Configuration:**
-
-The type testing setup uses `tsd` directly with this configuration in `tsd.json`:
-
-```json
-{
-  "directory": "tests/types",
-  "compilerOptions": {
-    "module": "commonjs",
-    "target": "es2022",
-    "lib": ["es2022"],
-    "moduleResolution": "node",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "exactOptionalPropertyTypes": true
-  }
-}
-```
-
-This ensures that pgvibe's type system correctly validates queries at compile time, providing excellent developer experience with immediate feedback on type errors.
-
-### Database Schema
-
-The test database includes comprehensive PostgreSQL features:
-
-```sql
--- Users with JSONB and arrays
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    email VARCHAR(255) UNIQUE,
-    active BOOLEAN DEFAULT true,
-    metadata JSONB DEFAULT '{}',
-    tags TEXT[] DEFAULT '{}',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Posts with full-text search
-CREATE TABLE posts (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id),
-    title VARCHAR(255) NOT NULL,
-    content TEXT,
-    published BOOLEAN DEFAULT false,
-    tags TEXT[] DEFAULT '{}',
-    metadata JSONB DEFAULT '{}',
-    search_vector TSVECTOR,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- PostgreSQL-specific indexes
-CREATE INDEX idx_users_metadata_gin ON users USING GIN (metadata);
-CREATE INDEX idx_posts_tags_gin ON posts USING GIN (tags);
-CREATE INDEX idx_posts_search ON posts USING GIN (search_vector);
-```
-
-## API Reference
-
-### Core Query Builder
-
-- `new pgvibe<DB>(config)` - Create database connection
-- `db.selectFrom(table)` - Start SELECT query
-- `.select(columns)` - Select specific columns with type inference
-- `.where(column, operator, value)` - Add WHERE conditions
-- `.innerJoin()` / `.leftJoin()` / `.rightJoin()` - JOIN operations
-- `.orderBy(column, direction)` - Add ORDER BY clause
-- `.limit(count)` - Add LIMIT clause
-- `.offset(count)` - Add OFFSET clause
-- `.execute()` - Execute query and return typed results
-
-### Currently Supported Operators
-
-- **Comparison**: `=`, `!=`, `<>`, `>`, `>=`, `<`, `<=`
-- **Text**: `like`, `not like`, `ilike`, `not ilike`
-- **Lists**: `in`, `not in`
-- **Null checks**: `is`, `is not`
-- **Existence**: `exists`, `not exists`
-
-### PostgreSQL-Specific Features (via Raw SQL)
-
-For advanced PostgreSQL features, use the `sql` template literal:
+### selectFrom()
 
 ```typescript
-import { sql } from "@pgvibe/client";
-
-// JSONB operations
-.where(sql`metadata->>'key' = ${"value"}`)
-.where(sql`metadata @> ${{ key: "value" }}`)
-
-// Array operations
-.where(sql`tags @> ${["tag1", "tag2"]}`)
-.where(sql`tags && ${["tag1", "tag2"]}`)
-
-// Full-text search
-.where(sql`search_vector @@ plainto_tsquery(${"search term"})`)
+selectFrom<TE extends TableExpression<DB>>(table: TE)
 ```
 
-## Roadmap
+Start a SELECT query from a table. Supports both plain table names and aliases.
 
-- **Native JSONB Operators**: Built-in support for `->`, `->>`, `@>`, `?`, `?&`, `?|`
-- **Native Array Operators**: Built-in support for `@>`, `<@`, `&&`, `ANY()`, `ALL()`
-- **Window Functions**: Complete PostgreSQL window function support
-- **CTEs**: Common Table Expressions (recursive and non-recursive)
-- **Full-Text Search**: Native `@@` and `@@@` operators with `tsvector`/`tsquery`
-- **Schema Introspection**: Automatic type generation from PostgreSQL schemas
-- **Advanced Types**: ENUMs, domains, custom types
-- **Connection Pooling**: Built-in connection pool management
-- **Migration System**: PostgreSQL-native migration tools
+### select()
 
-## Contributing
-
-We welcome contributions! Please see our contributing guidelines and make sure all tests pass:
-
-```bash
-bun test        # All tests must pass
-bun run typecheck  # Type checking must pass
+```typescript
+select<S extends ValidColumn<DB, TB>[]>(selections: S)
 ```
 
-## License
+Specify which columns to select with full type inference and autocomplete.
+
+### innerJoin() / leftJoin()
+
+```typescript
+innerJoin<TE extends TableExpression<DB>>(
+  table: TE,
+  leftColumn: JoinColumnReference<DB, TB, TE>,
+  rightColumn: JoinColumnReference<DB, TB, TE>
+)
+```
+
+Add JOIN operations with type-safe column references.
+
+### execute()
+
+```typescript
+async execute(): Promise<Prettify<O>[]>
+```
+
+Execute the query and return typed results.
+
+### toSQL()
+
+```typescript
+toSQL(): string
+```
+
+Generate the SQL string without executing.
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Write tests for new functionality
+4. Ensure all tests pass: `bun test`
+5. Submit a pull request
+
+## 📄 License
 
 MIT

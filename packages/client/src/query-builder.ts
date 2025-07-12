@@ -1,4 +1,4 @@
-import { TestDB } from "../tests/test-schema.js";
+// Production query builder - no test dependencies
 
 // === UTILITY TYPES ===
 
@@ -267,6 +267,6 @@ export class SelectQueryBuilder<DB, TB extends keyof DB, O> {
   }
 }
 
-// PGVibe query builder instance with TestDB schema
-const qb = new QueryBuilder<TestDB>();
+// PGVibe query builder instance - users should create their own with proper schema
+const qb = new QueryBuilder<any>();
 export { qb };

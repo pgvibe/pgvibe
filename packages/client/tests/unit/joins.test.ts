@@ -2,8 +2,8 @@
 // Goal: Make innerJoin("posts as p", "u.id", "p.user_id") work with aliases
 
 import { test, expect } from "bun:test";
-import { QueryBuilder } from "../src/query-builder";
-import type { TestDB } from "./test-schema";
+import { QueryBuilder } from "../../src/query-builder";
+import type { TestDB } from "../fixtures/test-schema";
 
 test("should support basic INNER JOIN", () => {
   const qb = new QueryBuilder<TestDB>();
