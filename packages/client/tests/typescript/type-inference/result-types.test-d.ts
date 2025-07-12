@@ -1,9 +1,9 @@
 // TypeScript type inference validation tests
 // These tests ensure result types are precisely inferred
 
-import { QueryBuilder } from "../../src/query-builder.js";
-import { TestDB } from "../__shared__/fixtures/test-schema.js";
-import { expectType } from "../__shared__/helpers/test-utils.js";
+import { QueryBuilder } from "../../../src/query-builder";
+import { TestDB } from "../../../__shared__/fixtures/test-schema";
+import { expectType } from "../../__shared__/helpers/test-utils";
 
 const qb = new QueryBuilder<TestDB>();
 

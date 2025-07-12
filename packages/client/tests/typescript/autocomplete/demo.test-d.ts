@@ -1,8 +1,8 @@
 // TypeScript autocomplete validation tests
 // These demonstrate perfect IDE experience and autocomplete behavior
 
-import { QueryBuilder } from "../../src/query-builder.js";
-import { TestDB } from "../__shared__/fixtures/test-schema.js";
+import { QueryBuilder } from "../../../src/query-builder";
+import { TestDB } from "../../../__shared__/fixtures/test-schema";
 
 const qb = new QueryBuilder<TestDB>();
 

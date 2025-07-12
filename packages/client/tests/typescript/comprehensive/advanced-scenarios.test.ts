@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
-import { pgvibe } from "../../src/index";
-import type { TestDB } from "../fixtures/test-schema";
+import { pgvibe } from "../../../src/index";
+import type { TestDB } from "../../__shared__/fixtures/test-schema";
 
 /**
  * ADVANCED TYPESCRIPT SCENARIO TESTS

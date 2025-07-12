@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
-import { QueryBuilder } from "../../src/query-builder.js";
-import { TestDB } from "../fixtures/test-schema.js";
+import { QueryBuilder } from "../../../src/query-builder";
+import { TestDB } from "../../__shared__/fixtures/test-schema";
 
 /**
  * COMPREHENSIVE TYPESCRIPT REGRESSION PREVENTION TESTS
