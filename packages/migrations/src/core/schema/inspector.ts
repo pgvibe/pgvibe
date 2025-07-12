@@ -7,6 +7,7 @@ import type {
   CheckConstraint,
   UniqueConstraint,
   Index,
+  EnumType,
 } from "../../types/schema";
 
 export class DatabaseInspector {
@@ -419,5 +420,37 @@ export class DatabaseInspector {
     }
 
     return uniqueConstraints;
+  }
+
+  async getCurrentEnums(client: Client): Promise<EnumType[]> {
+    const enumsResult = await client.query(`
+      SELECT 
+        t.typname as enum_name,
+        e.enumlabel as enum_value,
+        e.enumsortorder
+      FROM pg_type t
+      JOIN pg_enum e ON t.oid = e.enumtypid
+      WHERE t.typnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+      ORDER BY t.typname, e.enumsortorder
+    `);
+
+    const enumGroups = new Map<string, string[]>();
+    
+    for (const row of enumsResult.rows) {
+      const enumName = row.enum_name;
+      const enumValue = row.enum_value;
+      
+      if (!enumGroups.has(enumName)) {
+        enumGroups.set(enumName, []);
+      }
+      enumGroups.get(enumName)!.push(enumValue);
+    }
+
+    const enums: EnumType[] = [];
+    for (const [name, values] of enumGroups) {
+      enums.push({ name, values });
+    }
+
+    return enums;
   }
 }
