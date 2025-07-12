@@ -1,198 +1,120 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Development instructions for Claude Code when working with the pgvibe query builder.
 
-## 🚨 CRITICAL: TypeScript-First Development
+## Vision
 
-**TYPESCRIPT IS THE FUNDAMENTAL PILLAR** - Perfect autocomplete and compile-time error detection is THE #1 priority. Without this, the tool is useless.
+**A TypeScript-first query builder for PostgreSQL that provides an exceptional developer experience through perfect type safety.**
+
+The goal is to create a query builder where:
+- TypeScript developers feel at home with perfect autocomplete and compile-time validation
+- PostgreSQL's full feature set is accessible without abstraction overhead
+- Type safety eliminates runtime query errors before they happen
+- The developer experience is so good that SQL becomes a joy to write in TypeScript
+
+## 🚨 CRITICAL: World-Class TypeScript Experience
+
+**THIS IS A TYPESCRIPT QUERY BUILDER FOR POSTGRESQL** - The entire value proposition depends on perfect TypeScript integration.
 
 **🎯 ABSOLUTE NON-NEGOTIABLE REQUIREMENTS:**
-- **Perfect Autocomplete**: Every column selection must provide intelligent autocomplete showing only valid columns
-- **Perfect Error Detection**: Invalid columns, tables, or alias violations MUST cause TypeScript compilation errors
+- **Perfect Autocomplete**: Developers must see only valid tables/columns in IDE autocomplete
+- **Compile-Time Error Detection**: Invalid tables, columns, or alias violations MUST cause TypeScript compilation errors
 - **Alias Exclusivity**: `selectFrom("users as u")` makes `"users.id"` invalid at compile time, only `"u.id"` and `"id"` allowed
-- **Type Safety First**: TypeScript experience is MORE IMPORTANT than runtime functionality
-- **Zero Compromises**: If TypeScript doesn't work perfectly, the implementation is wrong
+- **Intelligent Type Inference**: Result types must perfectly reflect the query (including nullable columns from LEFT JOINs)
+- **Zero Runtime Surprises**: If TypeScript says it's valid, it must work at runtime
+- **Developer Experience First**: TypeScript experience is MORE IMPORTANT than runtime performance or implementation complexity
 
-## ✅ Current Status: PRODUCTION READY
+**IF THE TYPESCRIPT EXPERIENCE IS NOT WORLD-CLASS, THE TOOL IS USELESS**
 
-**🎉 Major Milestone Completed**: The query builder is now production-ready with excellent foundation.
+## Development Approach
 
-### What We've Achieved
-- **Perfect TypeScript Integration** - Alias system works flawlessly
-- **40 Comprehensive Tests** - Unit, TypeScript, and integration tests
-- **Clean Package Structure** - Professional organization ready for publishing
-- **Excellent Developer Experience** - Autocomplete and error detection work perfectly
+### Test-Driven Development (TDD) - TypeScript Edition
+- **Always write TypeScript tests first** - Define expected compilation behavior before implementing
+- **Test both success AND failure cases** - Write tests that SHOULD compile and tests that SHOULD NOT compile
+- **TypeScript tests are the source of truth** - If tests pass, TypeScript experience is correct
+- **Test frequently** - Run `bun test` after every small change to catch TypeScript regressions
+- **Use `tests/typescript/` extensively** - This is where TypeScript behavior is validated
 
-### Current Implementation
-The alias system rebuild was **successfully completed**. All core features work:
+### Long-Term Thinking
+- **Step back before implementing** - Consider the best long-term solution, not just the quick fix
+- **Design for extensibility** - How will this work with future PostgreSQL features?
+- **Think about the developer experience** - Will this be intuitive for users?
+- **Consider type complexity** - Simpler types are better than clever but complex ones
+- **No backward compatibility concerns** - We're in early development, break anything for better design
 
-- ✅ **Basic Queries**: Single table selection with perfect autocomplete
-- ✅ **Table Aliases**: Complete alias exclusivity system working 
-- ✅ **JOIN Operations**: Multiple JOINs with proper type propagation
-- ✅ **Column Aliases**: `"column as alias"` syntax with type inference
-- ✅ **Type Safety**: Comprehensive compile-time validation
+### Core Principles
+- **PostgreSQL-native only** - Leverage PostgreSQL-specific features without abstraction overhead
+- **Types drive implementation** - Perfect TypeScript experience guides all decisions
+- **Simple over clever** - Readable, maintainable code over optimizations
+- **Breaking changes welcome** - Better to break now than maintain suboptimal APIs
 
-## Development Commands
+## TypeScript Validation Requirements
 
-### Essential Commands
-- `bun test` - Run all 40 tests (should always pass)
-- `bun test tests/unit/` - Run unit tests only
-- `bun test tests/typescript/` - Run TypeScript validation tests  
-- `bun run typecheck` - Check TypeScript compilation
-- `bun run build` - Build the package for distribution
+Every single feature must demonstrate PERFECT TypeScript behavior:
 
-### Development Workflow
-- `bun run dev` - Run development playground
-- `bun test --watch` - Watch mode for test development
+### Autocomplete Must Be Perfect
+- Only valid table names appear in `selectFrom()` autocomplete
+- Only valid column names appear in `select()` autocomplete  
+- Qualified columns (`"table.column"`) only show valid combinations
+- Alias exclusivity: after `"users as u"`, only `"u.column"` and `"column"` appear, never `"users.column"`
+- JOIN columns show combined autocomplete from all joined tables
 
-### Database Commands (When Needed)
-- `bun run db:up` - Start PostgreSQL database with Docker
-- `bun run db:down` - Stop PostgreSQL database
-- `bun run db:reset` - Reset database (remove volumes and restart)
+### Compile-Time Errors Must Be Comprehensive
+- Invalid table names cause TypeScript compilation errors
+- Invalid column names cause TypeScript compilation errors
+- Using `"users.column"` after `"users as u"` causes TypeScript compilation errors
+- Referencing columns from non-joined tables causes TypeScript compilation errors
+- Type mismatches in WHERE clauses cause TypeScript compilation errors
 
-## Project Architecture
+### Type Inference Must Be Intelligent
+- Result types perfectly match selected columns
+- LEFT JOIN columns are correctly typed as nullable (`string | null`)
+- INNER JOIN columns maintain non-nullable types
+- Column aliases affect result type property names
+- Complex nested queries maintain proper type flow
 
-### PostgreSQL-Native Query Builder
-This is `@pgvibe/client`, a PostgreSQL-native TypeScript query builder with advanced type safety. Unlike multi-database ORMs, pgvibe is built exclusively for PostgreSQL to leverage its full feature set without abstraction overhead.
+### Developer Experience Must Be Seamless
+- Error messages are clear and actionable
+- Types compile quickly (no infinite loops or extreme complexity)
+- IDE performance remains fast with large schemas
+- Code completion works in all contexts (WHERE, ORDER BY, etc.)
 
-### Core Features Working
-- **Perfect Alias System**: `db.selectFrom("users as u")` with full type safety
-- **Excellent TypeScript DX**: Amazing autocomplete and compile-time validation
-- **Simple but Powerful**: Easy to understand, AI-friendly codebase
-- **Production Ready**: Clean build, proper exports, comprehensive testing
+## Development Rules
 
-### Implementation Status
-```typescript
-// ✅ All of this works perfectly with TypeScript
-const result = await qb
-  .selectFrom("users as u")
-  .innerJoin("posts as p", "u.id", "p.user_id")
-  .leftJoin("comments as c", "p.id", "c.post_id")
-  .select([
-    "u.name",                    // string
-    "p.title as postTitle",      // string  
-    "c.content as comment"       // string | null (from LEFT JOIN)
-  ])
-  .execute();
-// Type: { name: string, postTitle: string, comment: string | null }[]
-```
+### Before Every Implementation
+1. **Write TypeScript tests first** - Define both positive (should compile) and negative (should error) test cases
+2. **Think long-term** - Is this the best solution for the future?
+3. **Consider alternatives** - What other approaches exist?
+4. **Design for simplicity** - Can this be simpler?
 
-## Current Project Structure
+### During Implementation
+- **Run TypeScript tests constantly** - `bun test tests/typescript/` after every change
+- **Write comprehensive test coverage** - Test every edge case for both compilation success and failure
+- **Ensure tests actually validate TypeScript behavior** - Not just runtime behavior
+- **Rely only on automated tests** - Never trust manual verification for correctness
 
-### Clean Development Structure
-```
-src/                        # Source code (the real documentation)
-├── types/                  # Modular type definitions
-│   ├── database.ts        # Database schema types
-│   ├── columns.ts         # Column reference types
-│   ├── query.ts           # Query context types  
-│   ├── result.ts          # Result type inference
-│   └── index.ts           # Type re-exports
-├── query-builder.ts       # Core implementation
-└── index.ts               # Public API
+### Must Never Do
+- **Never break TypeScript experience** - This invalidates the entire tool
+- **Never ship without automated TypeScript tests** - Manual verification is not sufficient
+- **Never add features without comprehensive TypeScript tests** - TDD is mandatory
+- **Never accept "good enough" TypeScript** - It must be perfect or it's worthless
+- **Never compromise TypeScript for performance** - Developer experience comes first
+- **Never rely on manual testing for TypeScript correctness** - Only automated tests count
+- **Never compromise for backward compatibility** - We're in early development
 
-tests/                     # Comprehensive test suite (40 tests)
-├── unit/                  # Unit tests (8 tests)
-│   ├── basic-queries.test.ts
-│   ├── table-aliases.test.ts
-│   ├── joins.test.ts
-│   └── column-alias-types.test.ts
-├── typescript/            # TypeScript validation (23 tests)
-│   ├── positive.test.ts   # Autocomplete scenarios
-│   ├── negative.test.ts   # Error detection
-│   └── regression.test.ts # Prevent regressions
-├── integration/           # End-to-end tests (9 tests)
-│   └── multiple-joins.test.ts
-└── fixtures/
-    └── test-schema.ts     # Shared test database schema
+### TypeScript Testing is ABSOLUTELY CRITICAL
+- **ALWAYS write tests that SHOULD compile** - Verify valid TypeScript code works
+- **ALWAYS write tests that SHOULD NOT compile** - Verify invalid TypeScript code fails
+- **Automated tests are the ONLY way to ensure TypeScript correctness** - Never trust manual verification
+- **Every feature needs both positive and negative TypeScript tests** - No exceptions
+- **Test edge cases exhaustively** - Complex JOINs, nested queries, alias combinations
+- **If TypeScript tests don't pass, the feature is broken** - Period
 
-examples/                  # Live usage examples
-├── basic-usage.ts         # Simple queries and concepts
-├── advanced-queries.ts    # Complex JOINs and patterns
-└── type-safety.ts         # TypeScript showcase
+### The Testing Process (Automated Only)
+1. Write TypeScript test that demonstrates the desired behavior (should compile)
+2. Write TypeScript test that demonstrates what should be prevented (should NOT compile)  
+3. Implement the feature to make both tests pass
+4. Run `bun test tests/typescript/` to verify
+5. Only then is the feature considered working
 
-playground/                # Development testing
-├── index.ts              # Main playground  
-└── *.ts                  # Various test files
-```
-
-## Development Guidelines
-
-### Code Quality Standards
-- **TypeScript-first development**: Types drive implementation
-- **Test-driven approach**: All features have comprehensive tests
-- **Clean, readable code**: Simple implementations over clever optimizations
-- **Zero compromises**: If TypeScript doesn't work perfectly, fix the types
-
-### When Working on New Features
-1. **Write tests first** - Define expected behavior with TypeScript validation
-2. **Run existing tests** - Ensure no regressions (`bun test`)
-3. **Implement minimally** - Focus on making tests pass
-4. **Verify TypeScript** - Run `bun run typecheck`
-5. **Test in playground** - Use `playground/` for manual verification
-
-### Testing Strategy
-The test suite is comprehensive with 40 tests covering:
-
-- **Unit Tests**: Core functionality (basic queries, aliases, JOINs)
-- **TypeScript Tests**: Positive (autocomplete) and negative (error detection) validation
-- **Integration Tests**: Complex real-world scenarios
-- **Regression Prevention**: Comprehensive validation to prevent breaking changes
-
-### TypeScript Validation
-We have extensive TypeScript testing that ensures:
-- ✅ **Perfect autocomplete** in IDEs for table names, column names, and qualified columns
-- ✅ **Compile-time errors** for invalid table names, column names, and alias violations
-- ✅ **Correct type inference** for result objects including nullable columns from LEFT JOINs
-- ✅ **Alias exclusivity** enforcement where `"users as u"` makes `"users.id"` invalid
-
-## Important Notes
-
-### Current Status
-- **Production Ready**: Package can be published and used
-- **40 Tests Passing**: Comprehensive validation ensures reliability
-- **Perfect TypeScript**: Autocomplete and error detection work flawlessly
-- **Clean Architecture**: Well-organized, maintainable codebase
-
-### What NOT to Do
-- **Don't break existing tests** - All 40 tests must always pass
-- **Don't compromise TypeScript experience** - Type safety is #1 priority  
-- **Don't add features without tests** - Test-driven development is essential
-- **Don't create documentation files** - Source code + examples are the docs
-
-### What TO Do
-- **Run tests frequently** - `bun test` should be your best friend
-- **Use the playground** - Test ideas in `playground/` before implementing
-- **Check TypeScript** - Run `bun run typecheck` regularly
-- **Look at examples** - `examples/` directory shows how everything works
-- **Follow existing patterns** - Study the current implementation before adding features
-
-### PostgreSQL-Only Focus
-- No multi-database support - PostgreSQL-native implementation
-- Leverage PostgreSQL-specific features (JSONB, arrays, full-text search)
-- Direct optimization without dialect abstraction overhead
-
-### Development Runtime
-Project uses Bun as the JavaScript runtime and package manager. All commands should use `bun` instead of `npm`/`yarn`.
-
-## Quick Reference
-
-### Key Files to Understand
-- **`src/query-builder.ts`** - Main implementation
-- **`src/types/`** - Type system organization
-- **`tests/typescript/regression.test.ts`** - Comprehensive TypeScript validation
-- **`examples/type-safety.ts`** - TypeScript experience showcase
-
-### Essential Commands
-- **Development**: `bun test` (run all tests)
-- **Type checking**: `bun run typecheck`
-- **Build**: `bun run build`
-- **Playground**: `bun run dev`
-
-### Success Criteria
-- All 40 tests pass ✅
-- TypeScript compilation succeeds ✅  
-- Perfect autocomplete in IDE ✅
-- Compile-time error detection ✅
-
-The query builder is now a solid, production-ready foundation with excellent TypeScript integration!
+**Note**: Playground is available for developers to experiment, but never rely on manual testing for feature validation.
