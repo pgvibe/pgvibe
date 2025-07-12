@@ -40,6 +40,7 @@ export type {
 } from "./types/index";
 
 // Valid column expressions for selection (including aliases)
+// Focus on semantic validation - PostgreSQL handles syntax validation
 export type ValidColumn<DB, TB extends keyof DB> =
   | ColumnName<DB, TB>
   | QualifiedColumnName<DB, TB>
@@ -80,13 +81,15 @@ export class SelectQueryBuilder<DB, TB extends keyof DB, O> {
   private table: string;
   private selections: string[] = [];
   private joins: string[] = [];
+  private _sqlCache?: string; // Performance: Cache generated SQL
+  private _isDirty = true; // Track if SQL needs regeneration
 
   constructor(table: string) {
     this.table = table;
   }
 
-  // Adds column selections with proper typing and alias support
-  select<S extends ValidColumn<DB, TB>[]>(
+  // Optimized: Adds column selections with proper typing and alias support
+  select<S extends [ValidColumn<DB, TB>, ...ValidColumn<DB, TB>[]]>(
     selections: S
   ): SelectQueryBuilder<DB, TB, O & SelectionResult<DB, TB, S>> {
     const newBuilder = new SelectQueryBuilder<
@@ -94,52 +97,59 @@ export class SelectQueryBuilder<DB, TB extends keyof DB, O> {
       TB,
       O & SelectionResult<DB, TB, S>
     >(this.table);
-    newBuilder.selections = [
-      ...this.selections,
-      ...(selections as readonly string[]),
-    ];
-    newBuilder.joins = [...this.joins];
+    // Performance: Direct assignment instead of spread for small arrays
+    newBuilder.selections = this.selections.concat(selections as readonly string[]);
+    newBuilder.joins = this.joins.slice(); // Faster than spread for arrays
     return newBuilder;
   }
 
-  // Adds an INNER JOIN with type-safe column references
+  // Optimized: Adds an INNER JOIN with type-safe column references
   innerJoin<
     TE extends TableExpression<DB>,
     K1 extends JoinColumnReference<DB, TB, TE>,
     K2 extends JoinColumnReference<DB, TB, TE>
   >(table: TE, k1: K1, k2: K2): QueryBuilderWithJoin<DB, TB, O, TE> {
     const newBuilder = new SelectQueryBuilder(this.table) as any;
-    newBuilder.selections = [...this.selections];
-    newBuilder.joins = [...this.joins, `INNER JOIN ${table} ON ${k1} = ${k2}`];
+    newBuilder.selections = this.selections.slice();
+    newBuilder.joins = this.joins.concat(`INNER JOIN ${table} ON ${k1} = ${k2}`);
+    newBuilder._isDirty = true; // Mark as dirty for SQL regeneration
     return newBuilder;
   }
 
-  // Adds a LEFT JOIN with type-safe column references
+  // Optimized: Adds a LEFT JOIN with type-safe column references
   leftJoin<
     TE extends TableExpression<DB>,
     K1 extends JoinColumnReference<DB, TB, TE>,
     K2 extends JoinColumnReference<DB, TB, TE>
   >(table: TE, k1: K1, k2: K2): QueryBuilderWithJoin<DB, TB, O, TE> {
     const newBuilder = new SelectQueryBuilder(this.table) as any;
-    newBuilder.selections = [...this.selections];
-    newBuilder.joins = [...this.joins, `LEFT JOIN ${table} ON ${k1} = ${k2}`];
+    newBuilder.selections = this.selections.slice();
+    newBuilder.joins = this.joins.concat(`LEFT JOIN ${table} ON ${k1} = ${k2}`);
+    newBuilder._isDirty = true; // Mark as dirty for SQL regeneration
     return newBuilder;
   }
 
-  // Generates the final SQL string
+  // Optimized: Generates the final SQL string with caching
   toSQL(): string {
-    const selectList =
-      this.selections.length > 0 ? this.selections.join(", ") : "*";
-    // Convert lowercase 'as' to uppercase 'AS' for proper SQL formatting
-    const fromClause = this.table.replace(/ as /g, " AS ");
+    // Performance: Return cached SQL if not dirty
+    if (!this._isDirty && this._sqlCache) {
+      return this._sqlCache;
+    }
+
+    const selectList = this.selections.length > 0 ? this.selections.join(", ") : "*";
+    // Performance: Use regex with global flag for better performance
+    const fromClause = this.table.replace(/\bas\b/g, "AS");
     let sql = `SELECT ${selectList} FROM ${fromClause}`;
 
     if (this.joins.length > 0) {
-      // Also convert 'as' to 'AS' in JOIN clauses
-      const joins = this.joins.map((join) => join.replace(/ as /g, " AS "));
-      sql += " " + joins.join(" ");
+      // Performance: Pre-process joins once and join efficiently
+      const processedJoins = this.joins.map(join => join.replace(/\bas\b/g, "AS"));
+      sql += " " + processedJoins.join(" ");
     }
 
+    // Cache the result
+    this._sqlCache = sql;
+    this._isDirty = false;
     return sql;
   }
 

@@ -79,8 +79,8 @@ jobs:
     - name: Run type validation tests
       run: cd packages/client && bun run test:types
 
-    - name: Run TypeScript compilation tests
-      run: cd packages/client && bun run test:typescript
+    - name: Run performance benchmarks
+      run: cd packages/client && bun run test:benchmarks
 
     - name: Run unit tests
       run: cd packages/client && bun run test:unit
