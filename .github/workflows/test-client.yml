@@ -70,6 +70,9 @@ jobs:
     - name: Run TypeScript type checking
       run: cd packages/client && bun run typecheck
 
+    - name: Build package (required for tsd tests)
+      run: cd packages/client && bun run build
+
     - name: Run TypeScript definition tests
       run: cd packages/client && bun run test:tsd
 
@@ -84,9 +87,6 @@ jobs:
 
     - name: Run SQL integration tests
       run: cd packages/client && bun run test:sql
-
-    - name: Build package
-      run: cd packages/client && bun run build
 
     - name: Cleanup
       run: cd packages/client && docker compose down
