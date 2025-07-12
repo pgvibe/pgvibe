@@ -64,7 +64,7 @@ jobs:
     - name: Setup test database
       run: |
         cd packages/client
-        docker-compose up -d
+        docker compose up -d
         sleep 10
 
     - name: Run TypeScript type checking
@@ -89,4 +89,4 @@ jobs:
       run: cd packages/client && bun run build
 
     - name: Cleanup
-      run: cd packages/client && docker-compose down
+      run: cd packages/client && docker compose down
