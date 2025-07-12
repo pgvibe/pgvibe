@@ -8,6 +8,7 @@ import type {
   CheckConstraint,
   UniqueConstraint,
   Index,
+  EnumType,
 } from "../../types/schema";
 import { Logger } from "../../utils/logger";
 
@@ -19,11 +20,12 @@ export class SchemaParser {
     }
 
     const content = readFileSync(filePath, "utf-8");
-    return this.parseSchema(content);
+    const { tables } = this.parseSchema(content);
+    return tables;
   }
 
-  parseSchema(sql: string): Table[] {
-    const { tables, indexes } = this.parseWithCST(sql);
+  parseSchema(sql: string): { tables: Table[]; enums: EnumType[] } {
+    const { tables, indexes, enums } = this.parseWithCST(sql);
     
     // Associate standalone indexes with their tables
     const tableMap = new Map(tables.map(t => [t.name, t]));
@@ -38,7 +40,7 @@ export class SchemaParser {
       }
     }
     
-    return tables;
+    return { tables, enums };
   }
 
   parseCreateTableStatements(sql: string): Table[] {
@@ -51,9 +53,10 @@ export class SchemaParser {
     return indexes;
   }
 
-  private parseWithCST(sql: string): { tables: Table[]; indexes: Index[] } {
+  private parseWithCST(sql: string): { tables: Table[]; indexes: Index[]; enums: EnumType[] } {
     const tables: Table[] = [];
     const indexes: Index[] = [];
+    const enums: EnumType[] = [];
 
     try {
       const cst = parseCST(sql, {
@@ -76,6 +79,11 @@ export class SchemaParser {
             const index = this.parseCreateIndexFromCST(statement);
             if (index) {
               indexes.push(index);
+            }
+          } else if (statement.type === "create_type_stmt") {
+            const enumType = this.parseCreateTypeFromCST(statement);
+            if (enumType) {
+              enums.push(enumType);
             }
           } else if (statement.type === "alter_table_stmt") {
             throw new Error(
@@ -102,7 +110,7 @@ export class SchemaParser {
       throw error;
     }
 
-    return { tables, indexes };
+    return { tables, indexes, enums };
   }
 
   private parseCreateTableFromCST(node: any): Table | null {
@@ -743,6 +751,14 @@ export class SchemaParser {
         const operator = expr.operator || "";
         const operand = this.serializeDefaultValueFromCST(expr.expr);
         return `${operator}${operand}`;
+      } else if (expr.type === "cast_operator_expr" || expr.type === "cast_expr") {
+        // Handle cast expressions like '{}'::jsonb
+        const left = this.serializeDefaultValueFromCST(expr.left || expr.expr);
+        const right = expr.right?.name?.text || expr.right?.name?.name || expr.type_name?.name?.text || "unknown_type";
+        return `${left}::${right}`;
+      } else if (expr.type === "named_data_type") {
+        // Handle named data types in cast expressions
+        return expr.name?.text || expr.name?.name || "unknown_type";
       } else if (expr.text) {
         return expr.text;
       }
@@ -1360,8 +1376,8 @@ export class SchemaParser {
       }
 
       // Unary expressions (e.g., NOT)
-      if (expr.type === "unary_op_expr") {
-        const operator = expr.operator || "";
+      if (expr.type === "unary_op_expr" || expr.type === "prefix_op_expr") {
+        const operator = expr.operator?.text || expr.operator?.name || expr.operator || "";
         const operand = this.serializeExpressionFromCST(
           expr.operand || expr.expr
         );
@@ -1419,6 +1435,54 @@ export class SchemaParser {
         return `${left} ${operator} ${right}`;
       }
 
+      // Cast expressions (e.g., '{}' :: jsonb, value::type)
+      if (expr.type === "cast_operator_expr" || expr.type === "cast_expr") {
+        const left = this.serializeExpressionFromCST(expr.left || expr.expr);
+        const right = this.serializeExpressionFromCST(expr.right || expr.type_name || expr.dataType);
+        return `${left}::${right}`;
+      }
+
+      // Named data types (for cast expressions)
+      if (expr.type === "named_data_type") {
+        return expr.name?.text || expr.name?.name || "unknown_type";
+      }
+
+      // JSON/JSONB operators (?, ?&, ?|, ->, ->>, #>, #>>, @>, <@, etc.)
+      if (expr.type === "json_expr" || expr.type === "jsonb_expr") {
+        const left = this.serializeExpressionFromCST(expr.left);
+        const operator = expr.operator?.text || expr.operator?.name || "?";
+        const right = this.serializeExpressionFromCST(expr.right);
+        return `${left} ${operator} ${right}`;
+      }
+
+      // PostgreSQL-specific operators (including JSON operators)
+      if (expr.type === "pg_operator_expr" || expr.type === "postfix_op_expr") {
+        const left = this.serializeExpressionFromCST(expr.left || expr.expr);
+        const operator = expr.operator?.text || expr.operator?.name || "?";
+        
+        // Handle binary operators
+        if (expr.right) {
+          const right = this.serializeExpressionFromCST(expr.right);
+          return `${left} ${operator} ${right}`;
+        }
+        
+        // Handle postfix operators
+        return `${left}${operator}`;
+      }
+
+      // Array/subscript expressions [index] and JSON path access
+      if (expr.type === "subscript_expr" || expr.type === "array_subscript") {
+        const array = this.serializeExpressionFromCST(expr.expr || expr.left);
+        const index = this.serializeExpressionFromCST(expr.index || expr.right);
+        return `${array}[${index}]`;
+      }
+
+      // List expressions (for IN clauses, function arguments, etc.)
+      if (expr.type === "list_expr") {
+        const items = expr.items?.map((item: any) => this.serializeExpressionFromCST(item)) || [];
+        return items.join(", ");
+      }
+
       // CASE expressions
       if (expr.type === "case_expr") {
         let result = "CASE";
@@ -1447,8 +1511,8 @@ export class SchemaParser {
         return String(expr.value);
       }
 
-      // Log what we're missing for debugging
-      Logger.warning(`⚠️ Unhandled expression type: ${expr.type}, structure: ${JSON.stringify(expr)}`);
+      // Log what we're missing for debugging  
+      Logger.warning(`⚠️ Unhandled expression type: ${expr.type || 'undefined'}, structure: ${JSON.stringify(expr, null, 2)}`);
 
       // Final fallback
       return "unknown_expression";
@@ -1459,6 +1523,108 @@ export class SchemaParser {
         }`
       );
       return "unknown_expression";
+    }
+  }
+
+  private parseCreateTypeFromCST(node: any): EnumType | null {
+    try {
+      // Extract type name
+      const typeName = this.extractTypeNameFromCST(node);
+      if (!typeName) return null;
+
+      // Check if this is an ENUM type
+      if (!this.isEnumTypeFromCST(node)) {
+        // For now, we only support ENUM types
+        Logger.warning(`⚠️ Unsupported type definition: ${typeName}. Only ENUM types are currently supported.`);
+        return null;
+      }
+
+      // Extract ENUM values
+      const enumValues = this.extractEnumValuesFromCST(node);
+      if (enumValues.length === 0) {
+        throw new Error(
+          `Invalid ENUM type '${typeName}': ENUM types must have at least one value. ` +
+          `Empty ENUM types are not allowed in PostgreSQL.`
+        );
+      }
+
+      return {
+        name: typeName,
+        values: enumValues,
+      };
+    } catch (error) {
+      // If it's a validation error (e.g., empty ENUM), propagate it
+      if (error instanceof Error && error.message.includes('Invalid ENUM type')) {
+        throw error;
+      }
+      
+      // For other parsing errors, log and return null
+      Logger.warning(
+        `⚠️ Failed to parse CREATE TYPE from CST: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return null;
+    }
+  }
+
+  private extractTypeNameFromCST(node: any): string | null {
+    try {
+      return node.name?.text || node.name?.name || null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  private isEnumTypeFromCST(node: any): boolean {
+    try {
+      // Check if the node has an enum_type_definition
+      return node.definition?.type === "enum_type_definition";
+    } catch (error) {
+      return false;
+    }
+  }
+
+  private extractEnumValuesFromCST(node: any): string[] {
+    const values: string[] = [];
+    
+    try {
+      // ENUM values are in node.definition.values.expr.items based on the debug output
+      const enumItems = node.definition?.values?.expr?.items || [];
+
+      for (const valueNode of enumItems) {
+        const value = this.extractStringValueFromCST(valueNode);
+        if (value) {
+          values.push(value);
+        }
+      }
+    } catch (error) {
+      Logger.warning(`⚠️ Failed to extract ENUM values: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    return values;
+  }
+
+  private extractStringValueFromCST(node: any): string | null {
+    try {
+      // Handle string literals
+      if (node.type === "string_literal" || node.type === "literal") {
+        return node.text?.replace(/^'|'$/g, '') || node.value || null;
+      }
+      
+      // Handle direct text
+      if (typeof node.text === 'string') {
+        return node.text.replace(/^'|'$/g, '');
+      }
+
+      // Handle value property
+      if (typeof node.value === 'string') {
+        return node.value.replace(/^'|'$/g, '');
+      }
+
+      return null;
+    } catch (error) {
+      return null;
     }
   }
 }

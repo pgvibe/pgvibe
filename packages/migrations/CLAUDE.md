@@ -156,3 +156,6 @@ The **differ** is responsible for generating any necessary `ALTER`, `DROP`, or o
 ## Summary
 
 PgVibe follows the same philosophy as Terraform, Kubernetes, and other modern infrastructure tools: **declarative configuration**. This makes schemas easier to understand, version control, and maintain.
+
+# Testing
+ALWAYS use `bun test` to run tests, not `npm test`.

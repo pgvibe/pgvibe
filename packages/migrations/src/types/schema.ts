@@ -46,6 +46,11 @@ export interface Index {
   tablespace?: string;
 }
 
+export interface EnumType {
+  name: string;
+  values: string[];
+}
+
 export interface Table {
   name: string;
   columns: Column[];
