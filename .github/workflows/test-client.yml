@@ -2,7 +2,7 @@ name: Test Client Package
 
 on:
   push:
-    branches: [ main, feat/* ]
+    branches: [ main ]
     paths:
       - 'packages/client/**'
       - '.github/workflows/test-client.yml'

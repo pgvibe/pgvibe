@@ -2,7 +2,7 @@ name: Test Migrations Package
 
 on:
   push:
-    branches: [ main, feat/* ]
+    branches: [ main ]
     paths:
       - 'packages/migrations/**'
       - '.github/workflows/test-migrations.yml'
