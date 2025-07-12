@@ -23,7 +23,7 @@
     "test:types": "bun run scripts/validate-types.ts",
     "test:tsd": "tsd --files 'tests/**/*.test-d.ts'",
     "test:unit": "bun test tests/unit/",
-    "test:sql": "bun test tests/sql/",
+    "test:sql": "bun test tests/sql-generation/",
     "test:all": "bun test tests/",
     "typecheck": "tsc --noEmit",
     "dev": "bun run --watch playground/index.ts",
