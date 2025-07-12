@@ -2,11 +2,10 @@
 // Goal: Make innerJoin("posts as p", "u.id", "p.user_id") work with aliases
 
 import { test, expect } from "bun:test";
-import { QueryBuilder } from "../../src/query-builder";
-import type { TestDB } from "../fixtures/test-schema";
+import { createTestQueryBuilder } from "../__shared__/helpers/test-utils";
 
 test("should support basic INNER JOIN", () => {
-  const qb = new QueryBuilder<TestDB>();
+  const qb = createTestQueryBuilder();
   const query = qb
     .selectFrom("users")
     .innerJoin("posts", "users.id", "posts.user_id")
@@ -18,7 +17,7 @@ test("should support basic INNER JOIN", () => {
 });
 
 test("should support INNER JOIN with aliases", () => {
-  const qb = new QueryBuilder<TestDB>();
+  const qb = createTestQueryBuilder();
   const query = qb
     .selectFrom("users as u")
     .innerJoin("posts as p", "u.id", "p.user_id")
@@ -30,7 +29,7 @@ test("should support INNER JOIN with aliases", () => {
 });
 
 test("should support mixed qualified and unqualified columns in JOINs", () => {
-  const qb = new QueryBuilder<TestDB>();
+  const qb = createTestQueryBuilder();
   const query = qb
     .selectFrom("users as u")
     .innerJoin("posts as p", "u.id", "p.user_id")
@@ -42,7 +41,7 @@ test("should support mixed qualified and unqualified columns in JOINs", () => {
 });
 
 test("should support LEFT JOIN with aliases", () => {
-  const qb = new QueryBuilder<TestDB>();
+  const qb = createTestQueryBuilder();
   const query = qb
     .selectFrom("users as u")
     .leftJoin("posts as p", "u.id", "p.user_id")
@@ -54,8 +53,8 @@ test("should support LEFT JOIN with aliases", () => {
 });
 
 test("should support multiple JOINs chaining", () => {
-  // Add comments table to our schema for this test
-  const qb = new QueryBuilder<TestDB & { comments: { id: number; post_id: number; content: string } }>();
+  // Use the test schema which already includes comments table
+  const qb = createTestQueryBuilder();
   const query = qb
     .selectFrom("users as u")
     .innerJoin("posts as p", "u.id", "p.user_id")
@@ -68,7 +67,7 @@ test("should support multiple JOINs chaining", () => {
 });
 
 test("should support JOIN without aliases (comparison)", () => {
-  const qb = new QueryBuilder<TestDB>();
+  const qb = createTestQueryBuilder();
   const query = qb
     .selectFrom("users")
     .innerJoin("posts", "users.id", "posts.user_id")

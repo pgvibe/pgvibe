@@ -1,9 +1,8 @@
 import { test, expect } from "bun:test";
-import { QueryBuilder } from "../../src/query-builder.js";
-import { TestDB } from "../fixtures/test-schema.js";
+import { createTestQueryBuilder } from "../__shared__/helpers/test-utils";
 
 test("should infer correct types for column aliases", async () => {
-  const qb = new QueryBuilder<TestDB>();
+  const qb = createTestQueryBuilder();
   
   // Test basic column alias
   const result1 = await qb
@@ -49,7 +48,7 @@ test("should infer correct types for column aliases", async () => {
 });
 
 test("should handle multiple aliases in selection", async () => {
-  const qb = new QueryBuilder<TestDB>();
+  const qb = createTestQueryBuilder();
   
   const result = await qb
     .selectFrom("users")

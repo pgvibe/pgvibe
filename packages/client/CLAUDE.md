@@ -32,8 +32,42 @@ The goal is to create a query builder where:
 - **Always write TypeScript tests first** - Define expected compilation behavior before implementing
 - **Test both success AND failure cases** - Write tests that SHOULD compile and tests that SHOULD NOT compile
 - **TypeScript tests are the source of truth** - If tests pass, TypeScript experience is correct
-- **Test frequently** - Run `bun test` after every small change to catch TypeScript regressions
+- **Test frequently** - Run `bun run test:tsd` after every small change to catch TypeScript regressions
 - **Use `tests/typescript/` extensively** - This is where TypeScript behavior is validated
+
+### TypeScript Testing Approach (tsd)
+We use `tsd` for comprehensive TypeScript definition testing with **separate valid/invalid files**:
+
+**Create `valid.test-d.ts` files** for positive test cases:
+```typescript
+// tests/typescript/selectFrom/valid.test-d.ts
+import {expectType} from 'tsd';
+import {QueryBuilder} from '../../../src/query-builder';
+
+const qb = new QueryBuilder<TestDB>();
+
+// ✅ Valid cases should compile with correct types
+expectType<SelectQueryBuilder<TestDB, 'users', {}>>(qb.selectFrom('users'));
+qb.selectFrom('posts'); // Compilation test
+qb.selectFrom('users as u'); // Alias test
+```
+
+**Create `invalid.test-d.ts` files** for negative test cases:
+```typescript
+// tests/typescript/selectFrom/invalid.test-d.ts
+import {expectError} from 'tsd';
+import {QueryBuilder} from '../../../src/query-builder';
+
+const qb = new QueryBuilder<TestDB>();
+
+// ❌ Invalid cases should cause TypeScript errors
+expectError(qb.selectFrom('invalid_table'));
+expectError(qb.selectFrom(123));
+expectError(qb.selectFrom(null));
+```
+
+**Run tests**: `bun run test:tsd` - Single command tests both files automatically
+**Benefits**: Clear separation, easy to find examples, precise type checking, industry standard
 
 ### Long-Term Thinking
 - **Step back before implementing** - Consider the best long-term solution, not just the quick fix
