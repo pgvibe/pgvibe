@@ -1,333 +1,252 @@
-# PGVibe Query Builder - Development Plan
+# PGVibe Client Development Plan
 
-## 🎯 Current Status: **SOLID FOUNDATION COMPLETE**
+## Current State Analysis
 
-✅ **TypeScript Excellence Achieved**
-- Perfect alias system with 40 passing tests
-- Clean modular type system in `src/types/`
-- Flawless autocomplete and compile-time validation
-- Production-ready SELECT queries with JOINs
+### ✅ What's Working Well
+- **Strong TypeScript Foundation**: Comprehensive type system with excellent organization
+- **Test Infrastructure**: Well-structured testing with unit, TypeScript definition (tsd), and SQL string tests
+- **Core Query Building**: Basic SELECT, JOIN operations with type safety
+- **Development Tooling**: Good build scripts, Bun integration, Docker setup with PostgreSQL 15
+- **Database Infrastructure**: Ready test database with schema including array and JSONB columns
+- **Clear Vision**: CLAUDE.md provides excellent development guidelines focusing on TypeScript-first experience
 
-## 🏗️ Architecture Status
+### 🚨 Critical Issues (14 TypeScript Test Failures)
 
-### ✅ **Completed Components**
-- **Type System**: Consolidated, modular, extensible
-- **SELECT Queries**: Full support with aliases and JOINs
-- **Test Coverage**: Comprehensive (unit, integration, TypeScript validation)
-- **Package Structure**: Professional, ready for publishing
+The TypeScript definition tests are failing, indicating **broken type safety** - the core value proposition:
 
-### 🔄 **Next Priority: CRUD Operations**
+#### Failing Test Categories:
+1. **Table Alias Validation** (`selectFrom/aliases/invalid.test-d.ts`): 5 failures
+   - Missing alias name detection
+   - Malformed alias syntax validation
+   - Invalid alias character restrictions
 
-## 📋 Implementation Roadmap
+2. **Result Type Issues** (`result-types/aliases/invalid.test-d.ts`): 2 failures
+   - Type inference problems with aliases
+   - Return type validation
 
-### **Phase 1: WHERE Clauses (Foundation for all CRUD)**
-```typescript
-// Target API:
-db.selectFrom("users")
-  .select(["name", "email"])
-  .where("active", "=", true)
-  .where("age", ">", 18)
-  .execute()
-```
+3. **JOIN Validation** (`joins/*/invalid.test-d.ts`): 4 failures
+   - Invalid JOIN column reference detection
+   - Cross-table validation
 
-**Type Challenges:**
-- Column reference validation for WHERE conditions
-- Operator type safety (`=`, `>`, `LIKE`, `IN`, etc.)
-- Value type matching (column type must match value type)
-- Complex conditions (`AND`, `OR`, grouping)
+4. **Column Selection** (`select/*/invalid.test-d.ts`): 3 failures
+   - Invalid column detection in SELECT clauses
 
-### **Phase 2: INSERT Operations**
-```typescript
-// Target API:
-db.insertInto("users")
-  .values({
-    name: "John",
-    email: "john@example.com",
-    active: true
-  })
-  .returning(["id", "name"])
-  .execute()
-```
+### 🏗️ Architecture Status
+- **Core Implementation**: `src/query-builder.ts` exists but TypeScript validation is broken
+- **Type System**: Well-organized in `src/types/` but needs fixes
+- **Runtime Tests**: 21/21 passing (good runtime behavior)
+- **SQL String Tests**: Comprehensive validation of generated SQL strings
+- **Database Execution**: Missing - `execute()` returns empty arrays, no real PostgreSQL integration
+- **Package Configuration**: Solid with proper scripts and dependencies
 
-**Type Challenges:**
-- Required vs optional column validation
-- Default value handling
-- `RETURNING` clause with proper type inference
-- Bulk insert with array of values
+### 🚨 Missing Test Coverage
+- **SQL Execution Tests**: No validation that generated SQL actually runs against PostgreSQL
+- **Database Integration Tests**: Docker PostgreSQL available but unused in testing
+- **Real Data Validation**: No verification that queries return expected results from test data
 
-### **Phase 3: UPDATE Operations**
-```typescript
-// Target API:
-db.updateTable("users")
-  .set({
-    name: "Jane",
-    updated_at: new Date()
-  })
-  .where("id", "=", 123)
-  .returning(["id", "name"])
-  .execute()
-```
+## Development Priorities
 
-**Type Challenges:**
-- `SET` clause validation (only existing columns)
-- Mandatory `WHERE` clause (prevent accidental full table updates)
-- Partial column updates
-- `RETURNING` support
+### 🎯 Phase 1: Fix TypeScript Type Safety (CRITICAL)
+**Objective**: Restore the core value proposition - perfect TypeScript experience
 
-### **Phase 4: DELETE Operations**
-```typescript
-// Target API:
-db.deleteFrom("users")
-  .where("active", "=", false)
-  .where("last_login", "<", sixMonthsAgo)
-  .returning(["id"])
-  .execute()
-```
+#### P1: Fix Table Expression Validation
+- [ ] **Table alias syntax validation** - enforce proper "table as alias" format
+- [ ] **Invalid table name detection** - prevent typos/non-existent tables
+- [ ] **Alias character restrictions** - prevent numeric/invalid identifiers
 
-**Type Challenges:**
-- Mandatory `WHERE` clause requirement
-- Safe deletion patterns
-- `RETURNING` support for deleted records
+#### P2: Fix Column Reference Validation  
+- [ ] **Alias exclusivity enforcement** - `"users as u"` should invalidate `"users.column"`
+- [ ] **Invalid column detection** - prevent non-existent column references
+- [ ] **JOIN column validation** - ensure columns exist in joined tables
 
-## 🎨 Type System Design Principles
+#### P3: Fix Result Type Inference
+- [ ] **Selection result types** - ensure perfect type inference for SELECT clauses
+- [ ] **JOIN nullability** - LEFT JOIN columns should be `T | null`
+- [ ] **Alias handling** - column aliases should affect result property names
 
-### **Core Design Goals**
-1. **TypeScript-First**: Types drive the API, not runtime concerns
-2. **Progressive Enhancement**: Build complexity gradually
-3. **Fail Fast**: Compile-time errors over runtime errors
-4. **Excellent DX**: Perfect autocomplete at every step
+**Success Criteria**: `bun run test:tsd` passes with 0 errors
 
-### **Type System Architecture**
-```
-src/types/
-├── database.ts     # Schema and table definitions
-├── columns.ts      # Column reference and extraction
-├── query.ts        # Query context and joins
-├── result.ts       # Result type inference
-├── conditions.ts   # NEW: WHERE clause types
-├── mutations.ts    # NEW: INSERT/UPDATE/DELETE types
-└── index.ts        # Consolidated exports
-```
+### 🚀 Phase 2: Complete Testing Infrastructure
+**Objective**: Add missing test types for comprehensive validation
 
-## 🧩 Key Type Challenges to Solve
+#### P4: SQL Execution Testing
+- [ ] **Database connection setup** - integrate with Docker PostgreSQL
+- [ ] **SQL execution validation** - verify generated SQL actually runs
+- [ ] **Result data validation** - ensure queries return expected data from test schema
+- [ ] **Error handling tests** - verify invalid SQL fails appropriately
+- [ ] **Integration test suite** - `tests/integration/` directory
 
-### **1. WHERE Clause Type Safety**
-```typescript
-type WhereCondition<DB, TB, Column, Value> = 
-  Column extends ColumnName<DB, TB>
-    ? Value extends ColumnType<DB, TB, Column>
-      ? ValidCondition<Column, Operator, Value>
-      : TypeError<"Value type doesn't match column type">
-    : TypeError<"Invalid column reference">
-```
+#### P5: Enhanced SQL String Testing  
+- [ ] **PostgreSQL syntax validation** - ensure generated SQL is valid PostgreSQL
+- [ ] **Complex query testing** - multi-table JOINs, subqueries, CTEs
+- [ ] **Edge case SQL generation** - special characters, reserved words, etc.
 
-### **2. INSERT Value Validation**
-```typescript
-type InsertObject<DB, Table> = {
-  [K in keyof DB[Table] as IsRequired<DB[Table][K]> extends true 
-    ? K 
-    : never
-  ]: DB[Table][K]
-} & {
-  [K in keyof DB[Table] as IsRequired<DB[Table][K]> extends false 
-    ? K 
-    : never
-  ]?: DB[Table][K]
-}
-```
+### 🚀 Phase 3: Essential Query Features  
+**Objective**: Complete core PostgreSQL query building capabilities
 
-### **3. UPDATE SET Clause**
-```typescript
-type UpdateSet<DB, Table> = Partial<{
-  [K in keyof DB[Table]]: DB[Table][K]
-}>
-```
+#### P6: WHERE Clause Implementation
+- [ ] **Basic WHERE conditions** with type-safe column references
+- [ ] **Comparison operators** for all PostgreSQL types
+- [ ] **Logical operators** for complex conditions
+- [ ] **PostgreSQL array operations** (containment, overlap, element access)
+- [ ] **Array contains and overlap** operations
+- [ ] **Array element access** and slicing
+- [ ] **Vector similarity filtering** with distance thresholds
+- [ ] **Vector nearest neighbor** queries
+- [ ] **Type-safe value validation** preventing type mismatches
 
-## 🚀 Next Actions
+#### P7: ORDER BY and Pagination
+- [ ] **ORDER BY clause** with ASC/DESC support
+- [ ] **Type-safe column references** in ordering
+- [ ] **Array-based sorting** with array functions
+- [ ] **LIMIT/OFFSET** for pagination
 
-### **Immediate (This Session)**
-1. ✅ Consolidate type system (DONE)
-2. 🔄 Design WHERE clause types
-3. 📝 Plan INSERT/UPDATE/DELETE type signatures
+#### P8: Aggregate Functions
+- [ ] **Standard aggregates** with proper typing
+- [ ] **Array aggregates** for collecting and joining
+- [ ] **GROUP BY clause** with validation
+- [ ] **HAVING clause** for aggregate filtering
 
-### **Short Term (Next Sessions)**
-1. Implement WHERE clause system
-2. Add INSERT operations with full type safety
-3. Implement UPDATE and DELETE operations
-4. Comprehensive test coverage for all CRUD operations
+### 🏆 Phase 4: Advanced PostgreSQL Features
+**Objective**: Leverage PostgreSQL-specific capabilities
 
-### **Long Term**
-1. Advanced PostgreSQL features (JSONB, arrays, full-text search)
-2. Subqueries and CTEs
-3. Query optimization and caching
-4. Runtime database connection
+#### P9: Advanced JOIN Types
+- [ ] **RIGHT JOIN, FULL OUTER JOIN** support
+- [ ] **Self-joins** with alias handling
+- [ ] **Multiple table joins** with complex conditions
+- [ ] **Array-based JOINs** with array containment conditions
 
-## 🎯 Success Metrics
+#### P10: PostgreSQL-Specific Data Types
+- [ ] **JSONB operations** for JSON querying and manipulation
+- [ ] **Advanced array functions** for array processing
+- [ ] **UUID operations** and generation
+- [ ] **Range types** for interval data
+- [ ] **Geometric types** for spatial data
 
-### **TypeScript Experience**
-- [ ] WHERE conditions with perfect autocomplete
-- [ ] INSERT validation (required vs optional columns)
-- [ ] UPDATE with column type matching
-- [ ] DELETE with mandatory WHERE safety
+#### P10b: pgvector Support (AI/ML Features) 🤖
+- [ ] **Vector data type** with TypeScript type safety
+- [ ] **Vector similarity operations** (L2, inner product, cosine)
+- [ ] **Vector distance functions** with proper typing
+- [ ] **Vector indexing hints** for performance optimization
+- [ ] **Embedding search queries** with distance-based ordering
+- [ ] **Vector aggregations** for centroids and analysis
+- [ ] **Dimension validation** at compile time
 
-### **Developer Experience**
-- [ ] Zero TypeScript errors in valid queries
-- [ ] Helpful error messages for invalid queries
-- [ ] Intuitive API that feels natural
-- [ ] Comprehensive examples and documentation
+#### P11: Advanced Query Features
+- [ ] **Common Table Expressions (CTEs)** with recursive support
+- [ ] **Window functions** with full PostgreSQL support
+- [ ] **Subqueries** (correlated and non-correlated)
+- [ ] **CASE/WHEN expressions** with type safety
+- [ ] **NULL handling functions** with proper typing
 
-## 🧪 **COMPREHENSIVE TESTING STRATEGY**
+#### P12: Query Performance & Optimization
+- [ ] **Query analysis** and optimization hints
+- [ ] **Index usage recommendations**
+- [ ] **EXPLAIN plan integration**
+- [ ] **Query execution statistics**
 
-### **Current Status: 73 Tests Passing** ✅
+### 🧪 Phase 5: Enhanced Developer Experience
+**Objective**: Make the TypeScript experience even better
 
-We've achieved excellent test coverage, but need strategic restructuring for long-term maintainability.
+#### P13: Advanced Type Features
+- [ ] **Schema inference** from database introspection
+- [ ] **Migration support** with type evolution
+- [ ] **Conditional types** for complex scenarios
+- [ ] **Array type validation** (ensure array operations on array columns)
+- [ ] **Vector dimension validation** (compile-time vector dimension checking)
+- [ ] **AI/ML query patterns** (semantic search, RAG queries)
 
-### **🏗️ Test Architecture Design**
+#### P14: Tooling & Integration
+- [ ] **VS Code extension** for enhanced autocomplete
+- [ ] **ESLint rules** for query best practices
+- [ ] **Database connection pooling**
+- [ ] **Query debugging tools**
 
-#### **1. TypeScript Tests** (`tests/typescript/`)
-**Purpose**: Validate compile-time type safety and developer experience
-- ✅ **Positive Tests**: Valid queries should provide perfect autocomplete
-- ✅ **Negative Tests**: Invalid queries should fail with `@ts-expect-error`
-- ✅ **Result Type Inference**: Complex queries return precisely typed results
-- ✅ **Edge Cases**: Unusual but valid scenarios work correctly
-- ✅ **Regression Prevention**: Catch type safety breakages
+## Implementation Strategy
 
-**Strategy**: These tests primarily validate TypeScript compilation and type inference.
+### Development Approach
+1. **Test-Driven Development**: Fix failing TypeScript tests first
+2. **Incremental Progress**: Complete one feature fully before moving to next
+3. **Validation Focus**: Every feature must pass both runtime and TypeScript tests
+4. **Long-term Thinking**: Design for extensibility and PostgreSQL feature completeness
 
-#### **2. Unit Tests** (`tests/unit/`)
-**Purpose**: Test individual components and methods in isolation
-- ✅ **Query Builder Creation**: `selectFrom()`, table aliases
-- ✅ **Selection Logic**: `select()` with various column patterns
-- ✅ **JOIN Logic**: `innerJoin()`, `leftJoin()` functionality
-- 🔄 **SQL Generation**: Validate exact SQL output (needs expansion)
-- 🔄 **Method Chaining**: Builder pattern behavior
+### Quality Gates
+- **TypeScript Tests**: Must pass 100% (`bun run test:tsd`)
+- **Unit Tests**: Maintain 100% pass rate (`bun run test:unit`)
+- **SQL String Tests**: Validate generated SQL syntax (`bun run test:sql`)
+- **Integration Tests**: Execute queries against real PostgreSQL (`bun run test:integration`)
+- **Type Coverage**: New features need comprehensive TypeScript validation
+- **Performance**: Type compilation should remain fast (<2s)
 
-**Strategy**: Focus on individual method behavior, not complex integration.
+### Test Strategy - Three Levels of Validation
+1. **TypeScript Tests** (`tests/typescript/`) - Compile-time type safety validation
+2. **SQL String Tests** (`tests/sql/`) - Generated SQL syntax validation  
+3. **Integration Tests** (`tests/integration/`) - Real PostgreSQL execution validation
 
-#### **3. SQL Generation Tests** (`tests/sql/`) - **NEW CATEGORY**
-**Purpose**: Validate that queries generate correct PostgreSQL SQL
-```typescript
-test("SQL: Basic SELECT generates correct syntax", () => {
-  const sql = db.selectFrom("users").select(["name"]).toSQL();
-  expect(sql).toBe("SELECT name FROM users");
-});
+### Risk Mitigation
+- **Breaking Changes Welcome**: Early development phase allows for API improvements
+- **TypeScript Complexity**: Prefer simple, readable types over clever optimizations
+- **Feature Creep**: Focus on core PostgreSQL capabilities, avoid ORM-like features
 
-test("SQL: Complex JOIN with aliases", () => {
-  const sql = db
-    .selectFrom("users as u")
-    .innerJoin("posts as p", "u.id", "p.user_id")
-    .select(["u.name", "p.title as postTitle"])
-    .toSQL();
-  expect(sql).toBe("SELECT u.name, p.title AS postTitle FROM users AS u INNER JOIN posts AS p ON u.id = p.user_id");
-});
-```
+## Success Metrics
 
-#### **4. Integration Tests** (`tests/integration/`)
-**Purpose**: Test real database execution with actual PostgreSQL
-```typescript
-test("INTEGRATION: Execute complex query against real database", async () => {
-  const db = pgvibe<TestDB>();
-  await db.connectTo(testDatabase);
-  
-  const results = await db
-    .selectFrom("users as u")
-    .innerJoin("posts as p", "u.id", "p.user_id")
-    .select(["u.name", "p.title"])
-    .execute();
-    
-  expect(results).toEqual([
-    { name: "John", title: "Hello World" }
-  ]);
-});
-```
+### Phase 1 Success (TypeScript Fix)
+- ✅ All 14 failing TypeScript tests pass
+- ✅ Perfect autocomplete in VS Code
+- ✅ Compile-time error detection for invalid queries
+- ✅ Type inference matches expectations
 
-### **🎯 Test Organization Strategy**
+### Long-term Success (PostgreSQL Query Builder)
+- ✅ Comprehensive PostgreSQL feature coverage
+- ✅ Industry-leading TypeScript developer experience  
+- ✅ Zero runtime query errors (prevented at compile time)
+- ✅ Performance competitive with hand-written SQL
 
-#### **Proposed Structure**:
-```
-tests/
-├── fixtures/
-│   ├── test-schema.ts          # TypeScript schema definitions
-│   ├── test-database.sql       # SQL setup for integration tests
-│   └── sample-data.sql         # Test data for integration tests
-├── typescript/
-│   ├── autocomplete.test.ts    # IDE autocomplete scenarios
-│   ├── error-detection.test.ts # Compile-time error scenarios  
-│   ├── type-inference.test.ts  # Result type validation
-│   └── regression.test.ts      # Prevent type safety regressions
-├── unit/
-│   ├── query-builder.test.ts   # Core builder functionality
-│   ├── table-selection.test.ts # selectFrom() behavior
-│   ├── column-selection.test.ts # select() behavior  
-│   ├── joins.test.ts           # JOIN functionality
-│   └── method-chaining.test.ts # Builder pattern behavior
-├── sql/
-│   ├── basic-queries.test.ts   # Simple SELECT statements
-│   ├── joins.test.ts           # JOIN SQL generation
-│   ├── aliases.test.ts         # Alias SQL formatting
-│   └── complex-queries.test.ts # Multi-table scenarios
-├── integration/
-│   ├── setup.ts                # Database connection helpers
-│   ├── basic-execution.test.ts # Simple query execution
-│   ├── join-execution.test.ts  # Complex JOIN queries
-│   └── performance.test.ts     # Query performance validation
-└── helpers/
-    ├── test-utils.ts           # Shared testing utilities
-    └── mock-database.ts        # Mock database for unit tests
-```
+## Next Immediate Actions
 
-### **🔄 Testing Principles**
+### Phase 1 (CRITICAL - Week 1)
+1. **Fix table alias validation** in type system
+2. **Restore alias exclusivity** TypeScript behavior  
+3. **Fix JOIN column reference** validation
+4. **Ensure all TypeScript tests pass** (`bun run test:tsd`)
 
-#### **1. Test Pyramid Structure**
-- **Many TypeScript Tests**: Fast, catch type issues early
-- **Many Unit Tests**: Fast, test individual components
-- **Some SQL Tests**: Medium speed, validate output correctness
-- **Few Integration Tests**: Slow, validate real-world behavior
+### Phase 2 (Testing Infrastructure - Week 2)
+5. **Implement database connection** for `execute()` method
+6. **Create integration test suite** (`tests/integration/`)
+7. **Add PostgreSQL execution validation**
+8. **Validate array operations** against test schema
 
-#### **2. Each Test Category Has Clear Purpose**
-- **TypeScript**: Developer experience and type safety
-- **Unit**: Component behavior and logic
-- **SQL**: Output correctness and formatting
-- **Integration**: Real-world execution and performance
+### Phase 3 (WHERE Clauses + AI Features - Week 3-4)
+9. **Implement basic WHERE conditions** with type safety
+10. **Add PostgreSQL array operations** with full operator support
+11. **Add pgvector support** with all distance operators
+12. **Add comprehensive array + vector support** in WHERE clauses
+13. **Validate all features** against real PostgreSQL with vector data
 
-#### **3. Comprehensive Coverage Strategy**
-- **Every feature** gets TypeScript + Unit + SQL tests
-- **Complex features** get additional Integration tests
-- **Regression prevention** across all categories
-- **Performance benchmarks** for complex queries
+## Key Insight: Three-Tier Testing Strategy
 
-### **🚀 Implementation Phases**
+The plan now includes **three essential test types** that every PostgreSQL query builder needs:
 
-#### **Phase 1**: Restructure Current Tests
-1. Move SQL generation tests to dedicated `tests/sql/` directory
-2. Separate pure type validation from runtime behavior
-3. Create shared test utilities and fixtures
+1. **TypeScript Validation** ✅ - Perfect compile-time type safety (mostly working, needs fixes)
+2. **SQL String Validation** ✅ - Correct SQL generation (working well)  
+3. **Database Execution Validation** ❌ - Real PostgreSQL integration (completely missing)
 
-#### **Phase 2**: Expand SQL Generation Tests
-1. Comprehensive SQL output validation for all features
-2. PostgreSQL-specific syntax testing
-3. Edge case SQL formatting
+## 🤖 AI/ML-First Positioning
 
-#### **Phase 3**: Add Integration Tests
-1. Set up test database with Docker
-2. Real query execution validation
-3. Performance and benchmark testing
+With pgvector support, PGVibe becomes the **only TypeScript-first query builder optimized for AI workloads**:
 
-#### **Phase 4**: Continuous Testing Strategy
-1. Pre-commit hooks running TypeScript + Unit tests
-2. CI pipeline with full test suite including integration
-3. Performance regression detection
+### Competitive Advantages:
+- **Perfect vector type safety** - compile-time dimension validation
+- **Semantic search queries** - `ORDER BY embedding <-> $1 LIMIT 10`
+- **Vector similarity operations** - L2, cosine, inner product with type safety
+- **RAG-optimized patterns** - embedding + metadata filtering
+- **PostgreSQL + AI native** - no abstraction overhead for vector operations
 
----
+### AI Query Capabilities:
+- **Semantic search** with metadata filtering
+- **Vector similarity** with distance thresholds  
+- **Nearest neighbor** retrieval with ordering
+- **Type-safe vector dimensions** at compile time
+- **RAG-optimized patterns** for AI applications
 
-## 📊 Current Test Coverage: **73 Tests Passing**
-- **TypeScript Tests**: 51 tests (type safety, autocomplete, errors)
-- **Unit Tests**: 14 tests (core functionality)
-- **SQL Tests**: 8 tests (mixed in with unit tests)
-- **Integration Tests**: 0 tests (placeholder file only)
-
----
-
-**Foundation Status: EXCELLENT** ✅  
-**Test Strategy: COMPREHENSIVE & SCALABLE** 🧪  
-**Next Focus: Restructure tests then implement WHERE clauses** 🎯
+The foundation is solid, but the broken TypeScript validation needs immediate attention, followed by adding the missing database execution testing and cutting-edge AI/ML capabilities to create the **premier TypeScript query builder for the AI era**.
