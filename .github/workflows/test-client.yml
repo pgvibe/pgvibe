@@ -1,0 +1,92 @@
+name: Test Client Package
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'packages/client/**'
+      - '.github/workflows/test-client.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'packages/client/**'
+      - '.github/workflows/test-client.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: pgvibe_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        options: >-
+          --health-cmd "pg_isready -U test_user -d pgvibe_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Bun
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: latest
+
+    - name: Install dependencies
+      run: bun install
+
+    - name: Install client package dependencies
+      run: cd packages/client && bun install
+
+    - name: Install PostgreSQL client
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y postgresql-client
+
+    - name: Wait for PostgreSQL
+      run: |
+        for i in {1..30}; do
+          if pg_isready -h localhost -p 5432 -U test_user -d pgvibe_test; then
+            echo "PostgreSQL is ready!"
+            break
+          fi
+          echo "Waiting for PostgreSQL... ($i/30)"
+          sleep 2
+        done
+
+    - name: Setup test database
+      run: |
+        cd packages/client
+        docker compose up -d
+        sleep 10
+
+    - name: Run TypeScript type checking
+      run: cd packages/client && bun run typecheck
+
+    - name: Build package (required for tsd tests)
+      run: cd packages/client && bun run build
+
+    - name: Run TypeScript definition tests
+      run: cd packages/client && bun run test:tsd
+
+    - name: Run type validation tests
+      run: cd packages/client && bun run test:types
+
+    - name: Run TypeScript compilation tests
+      run: cd packages/client && bun run test:typescript
+
+    - name: Run unit tests
+      run: cd packages/client && bun run test:unit
+
+    - name: Run SQL integration tests
+      run: cd packages/client && bun run test:sql
+
+    - name: Cleanup
+      run: cd packages/client && docker compose down

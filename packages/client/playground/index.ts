@@ -1,5 +1,5 @@
 import { pgvibe } from "../src/index";
-import type { TestDB } from "../tests/fixtures/test-schema";
+import type { TestDB } from "../tests/__shared__/fixtures/test-schema";
 
 // Use properly typed query builder instead of the any-typed qb
 const db = pgvibe<TestDB>();
