@@ -81,6 +81,7 @@ expectError(qb.selectFrom(null));
 - **Types drive implementation** - Perfect TypeScript experience guides all decisions
 - **Simple over clever** - Readable, maintainable code over optimizations
 - **Breaking changes welcome** - Better to break now than maintain suboptimal APIs
+- **No runtime validations** - All SQL validation is offloaded to PostgreSQL. Focus purely on TypeScript compile-time validation.
 
 ## TypeScript Validation Requirements
 
